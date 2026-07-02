@@ -10,6 +10,7 @@ export const camera = new THREE.PerspectiveCamera(
 	1000,
 );
 
+camera.position.y = 1.25;
 camera.position.z = 7.5;
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -17,23 +18,24 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
 export const orbitControls = new OrbitControls(camera, renderer.domElement);
+orbitControls.enabled = false;
 
-export function initRenderer(container: HTMLElement = document.body): void {
+export const initRenderer = (container: HTMLElement = document.body): void => {
 	container.appendChild(renderer.domElement);
-}
+};
 
-export function handleResize(): void {
+export const handleResize = (): void => {
 	window.addEventListener("resize", () => {
 		camera.aspect = window.innerWidth / window.innerHeight;
 		camera.updateProjectionMatrix();
 		renderer.setSize(window.innerWidth, window.innerHeight);
 	});
-}
+};
 
-export function startAnimationLoop(callback?: () => void): void {
+export const startAnimationLoop = (callback?: () => void): void => {
 	renderer.setAnimationLoop(() => {
 		callback?.();
 		orbitControls.update();
 		renderer.render(scene, camera);
 	});
-}
+};

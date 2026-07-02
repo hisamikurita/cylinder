@@ -1,13 +1,21 @@
 import * as THREE from "three";
 
-export function createCurvedPlaneGeometry(
+export interface CurvedPlaneData {
+	flatPositions: Float32Array;
+	curvedPositions: Float32Array;
+}
+
+export const createCurvedPlaneGeometry = (
 	width: number,
 	height: number,
 	radius: number,
 	segments: number,
-): THREE.PlaneGeometry {
+): THREE.PlaneGeometry => {
 	const geometry = new THREE.PlaneGeometry(width, height, segments, 1);
 	const position = geometry.attributes.position;
+
+	// 平面の頂点位置を保存
+	const flatPositions = new Float32Array(position.array);
 
 	// 各頂点を円弧状に変形
 	const arcAngle = width / radius;
@@ -16,7 +24,6 @@ export function createCurvedPlaneGeometry(
 		const x = position.getX(i);
 		const y = position.getY(i);
 
-		// x座標を角度に変換して円弧上に配置
 		const angle = (x / width) * arcAngle;
 		const newX = Math.sin(angle) * radius;
 		const newZ = Math.cos(angle) * radius - radius;
@@ -24,6 +31,15 @@ export function createCurvedPlaneGeometry(
 		position.setXYZ(i, newX, y, newZ);
 	}
 
+	// 曲面の頂点位置を保存
+	const curvedPositions = new Float32Array(position.array);
+
+	// userDataに両方の頂点位置を保存
+	geometry.userData = {
+		flatPositions,
+		curvedPositions,
+	} as CurvedPlaneData;
+
 	geometry.computeVertexNormals();
 	return geometry;
-}
+};

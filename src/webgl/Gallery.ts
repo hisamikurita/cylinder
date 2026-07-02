@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { createCurvedPlaneGeometry } from "./CurvedPlane";
 import { scene } from "./core";
+import {
+	createCoverMaterial,
+	updateCoverMaterialImageSize,
+} from "./coverMaterial";
 
 export interface GalleryOptions {
 	radius: number;
@@ -18,13 +22,17 @@ const defaultOptions: GalleryOptions = {
 	segments: 32,
 };
 
-export function createGallery(
+export let galleryGroup: THREE.Group;
+
+export const createGallery = (
 	imagePaths: string[],
 	options: Partial<GalleryOptions> = {},
-): THREE.Mesh[] {
+): THREE.Mesh[] => {
 	const opts = { ...defaultOptions, ...options };
 	const textureLoader = new THREE.TextureLoader();
 	const planes: THREE.Mesh[] = [];
+
+	galleryGroup = new THREE.Group();
 
 	for (let i = 0; i < opts.imageCount; i++) {
 		const geometry = createCurvedPlaneGeometry(
@@ -34,11 +42,19 @@ export function createGallery(
 			opts.segments,
 		);
 
-		const texture = textureLoader.load(imagePaths[i]);
-		const material = new THREE.MeshStandardMaterial({
-			map: texture,
-			side: THREE.DoubleSide,
+		const texture = textureLoader.load(imagePaths[i], (loadedTexture) => {
+			updateCoverMaterialImageSize(
+				material,
+				loadedTexture.image.width,
+				loadedTexture.image.height,
+			);
 		});
+
+		const material = createCoverMaterial(
+			texture,
+			opts.planeWidth,
+			opts.planeHeight,
+		);
 
 		const plane = new THREE.Mesh(geometry, material);
 
@@ -51,9 +67,11 @@ export function createGallery(
 		// 中心を向くように回転
 		plane.rotation.y = -angle + Math.PI / 2;
 
-		scene.add(plane);
+		galleryGroup.add(plane);
 		planes.push(plane);
 	}
 
+	scene.add(galleryGroup);
+
 	return planes;
-}
+};

@@ -3,9 +3,12 @@ import {
 	createGallery,
 	handleResize,
 	initRenderer,
+	setupGalleryRotation,
 	setupHelpers,
+	setupInteractions,
 	setupLights,
 	startAnimationLoop,
+	updateGalleryRotation,
 } from "./webgl";
 
 // レンダラーを初期化
@@ -20,10 +23,16 @@ const imagePaths = Array.from(
 	{ length: 6 },
 	(_, i) => `/sample-img-0${i + 1}.jpg`,
 );
-createGallery(imagePaths);
+const planes = createGallery(imagePaths);
+
+// インタラクションをセットアップ
+setupInteractions(planes);
+
+// ギャラリー回転をセットアップ
+setupGalleryRotation();
 
 // リサイズ対応
 handleResize();
 
 // アニメーション開始
-startAnimationLoop();
+startAnimationLoop(updateGalleryRotation);
