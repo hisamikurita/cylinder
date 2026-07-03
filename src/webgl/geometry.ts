@@ -8,10 +8,11 @@ export interface CurvedPlaneData {
 export const createCurvedPlaneGeometry = (
 	width: number,
 	height: number,
+	depth: number,
 	radius: number,
 	segments: number,
-): THREE.PlaneGeometry => {
-	const geometry = new THREE.PlaneGeometry(width, height, segments, 1);
+): THREE.BoxGeometry => {
+	const geometry = new THREE.BoxGeometry(width, height, depth, segments, 1, 1);
 	const position = geometry.attributes.position;
 
 	// 平面の頂点位置を保存
@@ -23,10 +24,13 @@ export const createCurvedPlaneGeometry = (
 	for (let i = 0; i < position.count; i++) {
 		const x = position.getX(i);
 		const y = position.getY(i);
+		const z = position.getZ(i);
 
 		const angle = (x / width) * arcAngle;
-		const newX = Math.sin(angle) * radius;
-		const newZ = Math.cos(angle) * radius - radius;
+		// zオフセットを考慮して曲げる
+		const curveRadius = radius + z;
+		const newX = Math.sin(angle) * curveRadius;
+		const newZ = Math.cos(angle) * curveRadius - radius;
 
 		position.setXYZ(i, newX, y, newZ);
 	}

@@ -1,3 +1,5 @@
+import gsap from "gsap";
+import { DURATION, EASING, GALLERY, ROTATION } from "./constants";
 import { renderer } from "./core";
 import { galleryGroup } from "./Gallery";
 
@@ -7,14 +9,15 @@ let isDragEnabled = true; // ドラッグ操作の有効/無効
 let isRotationPaused = false; // 回転更新の一時停止
 let previousMouseX = 0;
 let startMouseX = 0; // ドラッグ開始位置
-let autoRotationSpeed = -0.002;
+let autoRotationSpeed: number = ROTATION.AUTO_SPEED;
 let targetRotation = 0;
 let currentVelocity = 0;
 let isAutoRotating = true;
+let isMouseMoveEnabled = true;
 
-const damping = 0.95;
-const dragSensitivity = 0.005;
-const dragThreshold = 5; // ドラッグ判定の閾値（px）
+const damping = ROTATION.DAMPING;
+const dragSensitivity = ROTATION.DRAG_SENSITIVITY;
+const dragThreshold = ROTATION.DRAG_THRESHOLD;
 
 export const setupGalleryRotation = (): void => {
 	const canvas = renderer.domElement;
@@ -28,6 +31,36 @@ export const setupGalleryRotation = (): void => {
 	canvas.addEventListener("touchstart", onTouchStart);
 	canvas.addEventListener("touchmove", onTouchMove);
 	canvas.addEventListener("touchend", onTouchEnd);
+
+	// Tilt用のmousemove（常時）
+	window.addEventListener("mousemove", onMouseMoveTilt);
+};
+
+const onMouseMoveTilt = (event: MouseEvent): void => {
+	if (!galleryGroup || !isMouseMoveEnabled) return;
+
+	// 最下部で TILT_MIN、最上部で TILT_MAX
+	const normalizedY = 1 - event.clientY / window.innerHeight;
+	const targetTiltX =
+		GALLERY.TILT_MIN + normalizedY * (GALLERY.TILT_MAX - GALLERY.TILT_MIN);
+
+	// 左端で -SWAY_X、右端で +SWAY_X
+	const normalizedX = (event.clientX / window.innerWidth) * 2 - 1;
+	const targetPosX = normalizedX * GALLERY.SWAY_X;
+
+	gsap.to(galleryGroup.rotation, {
+		x: targetTiltX,
+		duration: DURATION.BASE,
+		ease: "power1.out",
+		overwrite: true,
+	});
+
+	gsap.to(galleryGroup.position, {
+		x: targetPosX,
+		duration: DURATION.BASE,
+		ease: "power1.out",
+		overwrite: true,
+	});
 };
 
 const onMouseDown = (event: MouseEvent): void => {
@@ -128,4 +161,38 @@ export const setDragEnabled = (value: boolean): void => {
 
 export const setRotationPaused = (value: boolean): void => {
 	isRotationPaused = value;
+};
+
+export const setMouseMoveEnabled = (value: boolean): void => {
+	isMouseMoveEnabled = value;
+};
+
+export const resetTiltAndSway = (): void => {
+	if (!galleryGroup) return;
+
+	gsap.to(galleryGroup.rotation, {
+		x: 0,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+		overwrite: true,
+	});
+
+	gsap.to(galleryGroup.position, {
+		x: 0,
+		y: 0,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+		overwrite: true,
+	});
+};
+
+export const restoreTiltAndSway = (): void => {
+	if (!galleryGroup) return;
+
+	gsap.to(galleryGroup.position, {
+		y: GALLERY.OFFSET_Y,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+		overwrite: true,
+	});
 };

@@ -9,6 +9,7 @@ import {
 	setupLights,
 	startAnimationLoop,
 	updateGalleryRotation,
+	updateParallax,
 } from "./webgl";
 
 // レンダラーを初期化
@@ -35,4 +36,7 @@ setupGalleryRotation();
 handleResize();
 
 // アニメーション開始
-startAnimationLoop(updateGalleryRotation);
+startAnimationLoop(() => {
+	updateGalleryRotation();
+	updateParallax(planes);
+});

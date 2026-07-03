@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { PARALLAX, PLANE } from "./constants";
 import fragmentShader from "./shaders/cover.frag?raw";
 import vertexShader from "./shaders/cover.vert?raw";
 
@@ -12,6 +13,10 @@ export const createCoverMaterial = (
 			uTexture: { value: texture },
 			uPlaneSize: { value: new THREE.Vector2(planeWidth, planeHeight) },
 			uImageSize: { value: new THREE.Vector2(1, 1) },
+			uParallaxOffset: { value: 0 },
+			uParallaxScale: { value: PARALLAX.SCALE },
+			uBorderWidth: { value: PLANE.DEPTH },
+			uBorderColor: { value: new THREE.Color(PLANE.SIDE_COLOR) },
 		},
 		vertexShader,
 		fragmentShader,

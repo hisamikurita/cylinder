@@ -1,11 +1,15 @@
 import gsap from "gsap";
 import * as THREE from "three";
-import type { CurvedPlaneData } from "./CurvedPlane";
+import { DURATION, EASING, PARALLAX, PLANE } from "./constants";
+import type { CurvedPlaneData } from "./geometry";
 import { camera, orbitControls, renderer } from "./core";
 import {
 	getWasDragged,
+	resetTiltAndSway,
+	restoreTiltAndSway,
 	setAutoRotating,
 	setDragEnabled,
+	setMouseMoveEnabled,
 	setRotationPaused,
 } from "./galleryRotation";
 
@@ -42,7 +46,7 @@ const onResize = (): void => {
 	);
 
 	// 新しいビューポートサイズでカメラ距離を再計算
-	const geometry = activePlane.geometry as THREE.PlaneGeometry;
+	const geometry = activePlane.geometry as THREE.BoxGeometry;
 	const params = geometry.parameters;
 	const distance = calculateCameraDistance(params.width, params.height);
 
@@ -101,18 +105,29 @@ const zoomIn = (plane: THREE.Mesh): void => {
 	originalControlsTarget.copy(orbitControls.target);
 	activePlane = plane;
 
-	// ワールド座標を取得（galleryGroupの回転を考慮）
-	const planePosition = new THREE.Vector3();
-	plane.getWorldPosition(planePosition);
+	// 先にtilt/swayをリセット（座標計算前に必要）
+	setMouseMoveEnabled(false);
+	resetTiltAndSway();
 
-	const worldQuaternion = new THREE.Quaternion();
-	plane.getWorldQuaternion(worldQuaternion);
+	// リセット後のワールド座標を計算
+	// galleryGroupのposition=(0,0,0), rotation.x=0 として計算
+	const galleryRotationY = plane.parent?.rotation.y ?? 0;
+	const groupQuaternion = new THREE.Quaternion().setFromEuler(
+		new THREE.Euler(0, galleryRotationY, 0),
+	);
+
+	// ローカル座標をワールド座標に変換
+	const planePosition = plane.position.clone().applyQuaternion(groupQuaternion);
+
+	// プレーンの向きを計算
+	const localQuaternion = new THREE.Quaternion().setFromEuler(plane.rotation);
+	const worldQuaternion = groupQuaternion.clone().multiply(localQuaternion);
 	const planeNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(
 		worldQuaternion,
 	);
 
 	// プレーンサイズからカメラ距離を計算
-	const geometry = plane.geometry as THREE.PlaneGeometry;
+	const geometry = plane.geometry as THREE.BoxGeometry;
 	const params = geometry.parameters;
 	const distance = calculateCameraDistance(params.width, params.height);
 
@@ -126,19 +141,34 @@ const zoomIn = (plane: THREE.Mesh): void => {
 		x: targetPosition.x,
 		y: targetPosition.y,
 		z: targetPosition.z,
-		duration: 0.8,
-		ease: "power2.inOut",
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
 	});
 
 	gsap.to(orbitControls.target, {
 		x: planePosition.x,
 		y: planePosition.y,
 		z: planePosition.z,
-		duration: 0.8,
-		ease: "power2.inOut",
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
 	});
 
 	morphToFlat(plane);
+
+	// パララックススケールを1に戻し、ボーダーを消す
+	const materials = plane.material as THREE.Material[];
+	const coverMaterial = materials[4] as THREE.ShaderMaterial;
+	gsap.to(coverMaterial.uniforms.uParallaxScale, {
+		value: 1,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+	});
+	gsap.to(coverMaterial.uniforms.uBorderWidth, {
+		value: 0,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+	});
+
 	setAutoRotating(false);
 	setDragEnabled(false);
 	setRotationPaused(true);
@@ -150,19 +180,33 @@ const zoomOut = (): void => {
 		x: originalCameraPosition.x,
 		y: originalCameraPosition.y,
 		z: originalCameraPosition.z,
-		duration: 0.8,
-		ease: "power2.inOut",
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
 	});
 
 	gsap.to(orbitControls.target, {
 		x: originalControlsTarget.x,
 		y: originalControlsTarget.y,
 		z: originalControlsTarget.z,
-		duration: 0.8,
-		ease: "power2.inOut",
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
 	});
 
 	if (activePlane) {
+		// パララックススケールとボーダーを元に戻す
+		const materials = activePlane.material as THREE.Material[];
+		const coverMaterial = materials[4] as THREE.ShaderMaterial;
+		gsap.to(coverMaterial.uniforms.uParallaxScale, {
+			value: PARALLAX.SCALE,
+			duration: DURATION.BASE,
+			ease: EASING.TRANSFORM,
+		});
+		gsap.to(coverMaterial.uniforms.uBorderWidth, {
+			value: PLANE.DEPTH,
+			duration: DURATION.BASE,
+			ease: EASING.TRANSFORM,
+		});
+
 		morphToCurved(activePlane);
 		activePlane = null;
 	}
@@ -170,11 +214,13 @@ const zoomOut = (): void => {
 	setAutoRotating(true);
 	setDragEnabled(true);
 	setRotationPaused(false);
+	setMouseMoveEnabled(true);
+	restoreTiltAndSway();
 	isZoomed = false;
 };
 
 const morphToFlat = (plane: THREE.Mesh): void => {
-	const geometry = plane.geometry as THREE.PlaneGeometry;
+	const geometry = plane.geometry as THREE.BoxGeometry;
 	const data = geometry.userData as CurvedPlaneData;
 	const position = geometry.attributes.position;
 
@@ -182,8 +228,8 @@ const morphToFlat = (plane: THREE.Mesh): void => {
 
 	gsap.to(currentPositions, {
 		value: 1,
-		duration: 0.8,
-		ease: "power2.inOut",
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
 		onUpdate: () => {
 			const t = currentPositions.value;
 			for (let i = 0; i < position.count; i++) {
@@ -209,7 +255,7 @@ const morphToFlat = (plane: THREE.Mesh): void => {
 };
 
 const morphToCurved = (plane: THREE.Mesh): void => {
-	const geometry = plane.geometry as THREE.PlaneGeometry;
+	const geometry = plane.geometry as THREE.BoxGeometry;
 	const data = geometry.userData as CurvedPlaneData;
 	const position = geometry.attributes.position;
 
@@ -217,8 +263,8 @@ const morphToCurved = (plane: THREE.Mesh): void => {
 
 	gsap.to(currentPositions, {
 		value: 1,
-		duration: 0.8,
-		ease: "power2.inOut",
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
 		onUpdate: () => {
 			const t = currentPositions.value;
 			for (let i = 0; i < position.count; i++) {
