@@ -4,12 +4,12 @@ import {
 	handleResize,
 	initRenderer,
 	renderWithReflection,
+	resizeAtmosphere,
 	resizeReflection,
+	setupAtmosphere,
 	setupGalleryRotation,
 	setupGUI,
-	setupHelpers,
 	setupInteractions,
-	setupLights,
 	setupReflection,
 	startAnimationLoop,
 	updateGalleryRotation,
@@ -20,8 +20,8 @@ import {
 initRenderer();
 
 // ライトとヘルパーをセットアップ
-setupLights();
-setupHelpers();
+// setupLights();
+// setupHelpers();
 
 // ギャラリーを作成
 const imagePaths = Array.from(
@@ -39,11 +39,20 @@ setupGalleryRotation();
 // 鏡面反射をセットアップ
 setupReflection();
 
+// 背景の色付きライトをセットアップ
+setupAtmosphere();
+
+// intensity を 0.2〜0.55 でループアニメーション（各サイクル 1.5〜3.8 秒のランダム）
+// startAtmosphereIntensityAnimation(0.2, 0.55, 1.5, 3.8);
+
 // GUIをセットアップ
 setupGUI();
 
 // リサイズ対応
-handleResize(resizeReflection);
+handleResize(() => {
+	resizeReflection();
+	resizeAtmosphere();
+});
 
 // アニメーション開始
 startAnimationLoop(

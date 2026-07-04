@@ -6,6 +6,8 @@ uniform float uWaveSeed;
 
 varying vec2 vUv;
 varying float vFogDepth;
+varying vec3 vWorldPos;
+varying vec3 vWorldNormal;
 
 // 3D Simplex Noise by Ian McEwan, Ashima Arts (MIT License)
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -85,7 +87,11 @@ void main() {
 		pos.y += ny * uWaveStrength;
 	}
 
-	vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+	vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
+	vWorldPos = worldPosition.xyz;
+	vWorldNormal = normalize(mat3(modelMatrix) * normal);
+
+	vec4 mvPosition = viewMatrix * worldPosition;
 	vFogDepth = -mvPosition.z;
 	gl_Position = projectionMatrix * mvPosition;
 }

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { REFLECTION_PARAMS, SCENE } from "./constants";
 import { camera, renderer, scene } from "./core";
 import { galleryGroup, galleryPlanes, gallerySideMaterial } from "./Gallery";
+import { renderAtmosphere } from "./atmosphere";
 import blurFragmentShader from "./shaders/blur.frag?raw";
 import compositeFragmentShader from "./shaders/composite.frag?raw";
 import fullscreenVertexShader from "./shaders/fullscreen.vert?raw";
@@ -98,12 +99,13 @@ export const renderWithReflection = (
 	const originalScaleY = galleryGroup.scale.y;
 	const originalBackground = scene.background;
 
-	// === 1. 最終ターゲットをクリアし、床でステンシルを立てる ===
+	// === 1. 最終ターゲットをクリアし、背景を敷いてから床でステンシルを立てる ===
 	renderer.setRenderTarget(finalTarget);
-	if (originalBackground instanceof THREE.Color) {
-		renderer.setClearColor(originalBackground);
-	}
 	renderer.clear(true, true, true);
+
+	// 背景（両サイドの色付きグロウ）を全画面に描画
+	renderAtmosphere();
+
 	gl.enable(gl.STENCIL_TEST);
 	gl.stencilFunc(gl.ALWAYS, 1, 0xff);
 	gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);

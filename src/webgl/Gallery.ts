@@ -39,6 +39,7 @@ export const createGallery = (
 
 	galleryGroup = new THREE.Group();
 	galleryGroup.position.y = GALLERY.OFFSET_Y;
+	galleryGroup.position.z = GALLERY.OFFSET_Z;
 
 	gallerySideMaterial = new THREE.MeshBasicMaterial({ color: PLANE.SIDE_COLOR });
 	const sideMaterial = gallerySideMaterial;
@@ -109,6 +110,27 @@ export const updateGallerySideColor = (color: number): void => {
 		if (coverMaterial.uniforms.uBorderColor) {
 			coverMaterial.uniforms.uBorderColor.value.setHex(color);
 		}
+	}
+};
+
+type LightUniformKey =
+	| "uLightPos1"
+	| "uLightPos2"
+	| "uLightColor"
+	| "uSpecularStrength"
+	| "uShininess"
+	| "uAmbient"
+	| "uAttenuation";
+
+export const updateGalleryLightUniform = (
+	key: LightUniformKey,
+	updater: (uniform: THREE.IUniform) => void,
+): void => {
+	for (const plane of galleryPlanes) {
+		const materials = plane.material as THREE.Material[];
+		const cover = materials[4] as THREE.ShaderMaterial;
+		const uniform = cover.uniforms[key];
+		if (uniform) updater(uniform);
 	}
 };
 

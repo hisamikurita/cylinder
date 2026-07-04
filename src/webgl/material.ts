@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PARALLAX, PLANE } from "./constants";
+import { LIGHT_PARAMS, PARALLAX, PLANE } from "./constants";
 import fragmentShader from "./shaders/plane.frag?raw";
 import vertexShader from "./shaders/plane.vert?raw";
 
@@ -23,6 +23,25 @@ export const createCoverMaterial = (
 			uWaveFrequency: { value: 0 },
 			uWaveSpeed: { value: 0 },
 			uWaveSeed: { value: 0 },
+			uLightPos1: {
+				value: new THREE.Vector3(
+					LIGHT_PARAMS.pos1.x,
+					LIGHT_PARAMS.pos1.y,
+					LIGHT_PARAMS.pos1.z,
+				),
+			},
+			uLightPos2: {
+				value: new THREE.Vector3(
+					LIGHT_PARAMS.pos2.x,
+					LIGHT_PARAMS.pos2.y,
+					LIGHT_PARAMS.pos2.z,
+				),
+			},
+			uLightColor: { value: new THREE.Color(LIGHT_PARAMS.color) },
+			uSpecularStrength: { value: LIGHT_PARAMS.specularStrength },
+			uShininess: { value: LIGHT_PARAMS.shininess },
+			uAmbient: { value: LIGHT_PARAMS.ambient },
+			uAttenuation: { value: LIGHT_PARAMS.attenuation },
 			...THREE.UniformsLib.fog,
 		},
 		vertexShader,

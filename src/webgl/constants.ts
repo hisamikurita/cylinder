@@ -34,6 +34,7 @@ export const GALLERY = {
 	TILT_MAX: 0.2,
 	SWAY_X: 0.3, // 左右の揺れ幅
 	OFFSET_Y: 0.4, // 上方向のオフセット
+	OFFSET_Z: 0, // 奥行きオフセット（負の値でカメラから遠ざかる）
 } as const;
 
 export const PLANE = {
@@ -41,7 +42,7 @@ export const PLANE = {
 	HEIGHT: 2.0,
 	DEPTH: 0.035,
 	SEGMENTS: 32,
-	SIDE_COLOR: 0x333333,
+	SIDE_COLOR: 0x0d0d0d,
 } as const;
 
 // Scene
@@ -58,11 +59,40 @@ export const FOG = {
 
 // Reflection
 export const REFLECTION_PARAMS = {
-	brightness: 0.50,
+	brightness: 0.40,
 	blurRadius: 2.0,
 	waveStrength: 0.070,
 	waveFrequency: 4.0,
 	waveSpeed: 0.6,
+};
+
+// Background side glows (screen-space)
+// radiusX を狭く radiusY を大きくすると縦ストライプ、angle で傾けられる
+export const BACKGROUND_LIGHT_PARAMS = {
+	posL: { x: 0.19, y: 0.84 },
+	colorL: 0x969bc0,
+	intensity: 0.55,
+	radiusX: 0.42,
+	radiusY: 1.4,
+	falloff: 2.2,
+	angleL: 46, // 角度（度、時計回り正）
+	// 左右方向の濃淡バイアス（回転後ローカル空間）: +1 = 右側が濃く左側が薄い、-1 = 逆、0 = 対称
+	biasL: 0.8,
+	// 縦方向の広がり: +1 = 右にいくほど広がる、-1 = 左にいくほど広がる、0 = 均一
+	spreadL: 0.7,
+	// ライト全体にかけるブラー（ピクセル単位、0=なし）
+	blurRadius: 6.0,
+};
+
+// Spot Light (Blinn-Phong on plane material)
+export const LIGHT_PARAMS = {
+	pos1: { x: -8, y: 4, z: 11.1 },
+	pos2: { x: 8, y: 4, z: 2 },
+	color: 0xfcfcfc,
+	specularStrength: 3.0,
+	shininess: 8,
+	ambient: 0.32, // 非照射面の下地明度
+	attenuation: 0.04, // 距離減衰の強さ（大きいほどライトが早く暗くなる）
 };
 
 // Camera

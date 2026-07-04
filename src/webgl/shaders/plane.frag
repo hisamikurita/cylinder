@@ -12,6 +12,15 @@ uniform float uWaveFrequency;
 uniform float uWaveSpeed;
 uniform float uWaveSeed;
 
+// Light uniforms (Blinn-Phong)
+uniform vec3 uLightPos1;
+uniform vec3 uLightPos2;
+uniform vec3 uLightColor;
+uniform float uSpecularStrength;
+uniform float uShininess;
+uniform float uAmbient;
+uniform float uAttenuation;
+
 // Fog uniforms
 uniform vec3 fogColor;
 uniform float fogNear;
@@ -19,6 +28,8 @@ uniform float fogFar;
 
 varying vec2 vUv;
 varying float vFogDepth;
+varying vec3 vWorldPos;
+varying vec3 vWorldNormal;
 
 // 3D Simplex Noise by Ian McEwan, Ashima Arts (MIT License)
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -136,8 +147,35 @@ void main() {
 		}
 	}
 
+	// Blinn-Phong ライティング（拡散 + 距離減衰 + 鏡面）
+	vec3 N = normalize(vWorldNormal);
+	vec3 V = normalize(cameraPosition - vWorldPos);
+
+	vec3 L1v = uLightPos1 - vWorldPos;
+	vec3 L2v = uLightPos2 - vWorldPos;
+	float d1 = length(L1v);
+	float d2 = length(L2v);
+	vec3 L1 = L1v / max(d1, 0.0001);
+	vec3 L2 = L2v / max(d2, 0.0001);
+
+	// 距離による強度減衰
+	float atten1 = 1.0 / (1.0 + uAttenuation * d1 * d1);
+	float atten2 = 1.0 / (1.0 + uAttenuation * d2 * d2);
+
+	// 拡散光（Lambert）
+	float diff1 = max(dot(N, L1), 0.0) * atten1;
+	float diff2 = max(dot(N, L2), 0.0) * atten2;
+
+	// 鏡面（ハーフベクトル方式）
+	float s1 = pow(max(dot(N, normalize(L1 + V)), 0.0), uShininess) * atten1;
+	float s2 = pow(max(dot(N, normalize(L2 + V)), 0.0), uShininess) * atten2;
+	vec3 spec = (s1 + s2) * uLightColor * uSpecularStrength;
+
+	// 照度：環境光 + 拡散光。ライトが届いていないところは uAmbient のみ
+	vec3 lit = vec3(uAmbient) + (diff1 + diff2) * uLightColor;
+
 	// Apply fog (brightnessはフォグミックス前に掛ける：フォグに沈んだ部分は背景色と一致させる)
 	float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-	vec3 rgb = mix(color.rgb * uBrightness, fogColor, fogFactor);
+	vec3 rgb = mix((color.rgb * lit + spec) * uBrightness, fogColor, fogFactor);
 	gl_FragColor = vec4(rgb, color.a);
 }
