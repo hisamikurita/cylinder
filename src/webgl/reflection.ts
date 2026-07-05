@@ -1,15 +1,18 @@
 import * as THREE from "three";
-import { REFLECTION_PARAMS, SCENE } from "./constants";
+import { renderAtmosphere } from "./atmosphere";
+import { BACKGROUND_LIGHTS, REFLECTION_PARAMS, SCENE } from "./constants";
 import { camera, renderer, scene } from "./core";
 import { galleryGroup, galleryPlanes, gallerySideMaterial } from "./Gallery";
-import { renderAtmosphere } from "./atmosphere";
 import blurFragmentShader from "./shaders/blur.frag?raw";
 import compositeFragmentShader from "./shaders/composite.frag?raw";
+import floorFragmentShader from "./shaders/floor.frag?raw";
+import floorVertexShader from "./shaders/floor.vert?raw";
 import fullscreenVertexShader from "./shaders/fullscreen.vert?raw";
 
 // 床面（ミラー）
 let floorMesh: THREE.Mesh;
-const FLOOR_Y = -0.8; // 床のY座標
+let floorMaterial: THREE.ShaderMaterial;
+const FLOOR_Y = -0.7; // 床のY座標
 const FLOOR_SIZE = 20;
 
 let reflectionRT: THREE.WebGLRenderTarget;
@@ -44,15 +47,25 @@ const setupPostprocessing = (): void => {
 		depthWrite: false,
 	});
 
+	const light = BACKGROUND_LIGHTS[0];
 	compositeMaterial = new THREE.ShaderMaterial({
 		uniforms: {
 			tDiffuse: { value: null },
+			uLightPos: { value: new THREE.Vector3(light.pos3D.x, light.pos3D.y, light.pos3D.z) },
+			uLightDir: { value: new THREE.Vector3(0, 0, -1) },
+			uLightConeAngle: { value: light.spotConeAngle },
+			uLightColor: { value: new THREE.Color(light.colorL) },
+			uLightIntensity: { value: light.intensity },
+			uFloorY: { value: FLOOR_Y },
+			uInverseViewProjection: { value: new THREE.Matrix4() },
+			uCameraPos: { value: new THREE.Vector3() },
 		},
 		vertexShader: fullscreenVertexShader,
 		fragmentShader: compositeFragmentShader,
 		depthTest: false,
 		depthWrite: false,
 		transparent: true,
+		blending: THREE.AdditiveBlending,
 	});
 
 	fullscreenScene = new THREE.Scene();
@@ -62,10 +75,22 @@ const setupPostprocessing = (): void => {
 };
 
 export const setupReflection = (): void => {
-	// 床面のジオメトリとマテリアル
+	// 床面のジオメトリとマテリアル（ライティング対応）
 	const floorGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
-	const floorMaterial = new THREE.MeshBasicMaterial({
-		color: SCENE.BACKGROUND_COLOR,
+	const light = BACKGROUND_LIGHTS[0];
+
+	floorMaterial = new THREE.ShaderMaterial({
+		uniforms: {
+			uBaseColor: { value: new THREE.Color(SCENE.BACKGROUND_COLOR) },
+			uLightPos: { value: new THREE.Vector3(light.pos3D.x, light.pos3D.y, light.pos3D.z) },
+			uLightDir: { value: new THREE.Vector3(0, 0, -1) },
+			uLightConeAngle: { value: light.spotConeAngle },
+			uLightColor: { value: new THREE.Color(light.colorL) },
+			uLightIntensity: { value: light.intensity },
+			uCameraPos: { value: new THREE.Vector3() },
+		},
+		vertexShader: floorVertexShader,
+		fragmentShader: floorFragmentShader,
 	});
 
 	floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
@@ -74,6 +99,30 @@ export const setupReflection = (): void => {
 	scene.add(floorMesh);
 
 	setupPostprocessing();
+};
+
+export const updateFloorLightUniforms = (): void => {
+	if (!floorMaterial) return;
+
+	const light = BACKGROUND_LIGHTS[0];
+	const pos3D = light.pos3D;
+	const lightPos = new THREE.Vector3(pos3D.x, pos3D.y, pos3D.z);
+	const lightColor = new THREE.Color(light.colorL);
+
+	// アングルからスポットライト方向を計算
+	const angleX = THREE.MathUtils.degToRad(light.spotAngleX);
+	const angleY = THREE.MathUtils.degToRad(light.spotAngleY);
+	const lightDir = new THREE.Vector3(0, 0, -1);
+	lightDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), angleX);
+	lightDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleY);
+	lightDir.normalize();
+
+	floorMaterial.uniforms.uLightPos.value.copy(lightPos);
+	floorMaterial.uniforms.uLightDir.value.copy(lightDir);
+	floorMaterial.uniforms.uLightConeAngle.value = light.spotConeAngle;
+	floorMaterial.uniforms.uLightColor.value.copy(lightColor);
+	floorMaterial.uniforms.uLightIntensity.value = light.enabled ? light.intensity : 0;
+	floorMaterial.uniforms.uCameraPos.value.copy(camera.position);
 };
 
 export const resizeReflection = (): void => {
@@ -106,6 +155,7 @@ export const renderWithReflection = (
 	// 背景（両サイドの色付きグロウ）を全画面に描画
 	renderAtmosphere();
 
+	// 床面はステンシルのみ書き込む（色は描画しない）
 	gl.enable(gl.STENCIL_TEST);
 	gl.stencilFunc(gl.ALWAYS, 1, 0xff);
 	gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE);
@@ -175,6 +225,27 @@ export const renderWithReflection = (
 	gl.stencilFunc(gl.EQUAL, 1, 0xff);
 	gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
 
+	// ライト情報を更新
+	const light = BACKGROUND_LIGHTS[0];
+	const angleX = THREE.MathUtils.degToRad(light.spotAngleX);
+	const angleY = THREE.MathUtils.degToRad(light.spotAngleY);
+	const lightDir = new THREE.Vector3(0, 0, -1);
+	lightDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), angleX);
+	lightDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleY);
+	lightDir.normalize();
+
+	// inverseViewProjection行列を計算
+	const viewProjection = new THREE.Matrix4();
+	viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+	const inverseViewProjection = viewProjection.invert();
+
+	compositeMaterial.uniforms.uLightPos.value.set(light.pos3D.x, light.pos3D.y, light.pos3D.z);
+	compositeMaterial.uniforms.uLightDir.value.copy(lightDir);
+	compositeMaterial.uniforms.uLightConeAngle.value = light.spotConeAngle;
+	compositeMaterial.uniforms.uLightIntensity.value = light.enabled ? light.intensity : 0;
+	compositeMaterial.uniforms.uInverseViewProjection.value.copy(inverseViewProjection);
+	compositeMaterial.uniforms.uCameraPos.value.copy(camera.position);
+
 	fullscreenMesh.material = compositeMaterial;
 	compositeMaterial.uniforms.tDiffuse.value = blurRTB.texture;
 	renderer.render(fullscreenScene, fullscreenCamera);
@@ -183,7 +254,7 @@ export const renderWithReflection = (
 	gl.disable(gl.STENCIL_TEST);
 	galleryGroup.position.y = originalY;
 	galleryGroup.scale.y = originalScaleY;
-	floorMesh.visible = false;
+	floorMesh.visible = false; // 床面はstep1で描画済み
 	renderer.clearDepth();
 	renderer.render(scene, camera);
 

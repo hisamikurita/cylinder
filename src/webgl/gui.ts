@@ -3,14 +3,14 @@ import { scene } from "./core";
 import * as THREE from "three";
 import {
 	BACKGROUND_LIGHT_PARAMS,
+	BACKGROUND_LIGHTS,
+	EMISSIVE_PARAMS,
 	FOG,
-	LIGHT_PARAMS,
 	PLANE,
 	REFLECTION_PARAMS,
 	SCENE,
 } from "./constants";
-import { updateAtmosphereUniform } from "./atmosphere";
-import { updateGalleryLightUniform, updateGallerySideColor } from "./Gallery";
+import { updateGalleryEmissive, updateGallerySideColor } from "./Gallery";
 
 // パラメータオブジェクトを constants.ts に貼り付けやすい TS 形式に整形
 const COLOR_KEYS = new Set([
@@ -55,11 +55,19 @@ const formatObject = (
 	return `{\n${lines.join("\n")}\n${closingPad}}`;
 };
 
+const formatArray = (arr: unknown[], indent: number): string => {
+	const pad = "\t".repeat(indent);
+	const closingPad = "\t".repeat(indent - 1);
+	const items = arr.map((item) => `${pad}${formatObject(item as Record<string, unknown>, indent + 1)},`);
+	return `[\n${items.join("\n")}\n${closingPad}]`;
+};
+
 const dumpParams = (): string => {
 	const blocks = [
+		`export const EMISSIVE_PARAMS = ${formatObject(EMISSIVE_PARAMS, 1)};`,
 		`export const REFLECTION_PARAMS = ${formatObject(REFLECTION_PARAMS, 1)};`,
-		`export const LIGHT_PARAMS = ${formatObject(LIGHT_PARAMS, 1)};`,
 		`export const BACKGROUND_LIGHT_PARAMS = ${formatObject(BACKGROUND_LIGHT_PARAMS, 1)};`,
+		`export const BACKGROUND_LIGHTS = ${formatArray(BACKGROUND_LIGHTS, 1)};`,
 	];
 	return blocks.join("\n\n");
 };
@@ -135,6 +143,13 @@ export const setupGUI = (): GUI => {
 		updateGallerySideColor(value);
 	});
 
+	planeFolder
+		.add(EMISSIVE_PARAMS, "intensity", 0, 2, 0.01)
+		.name("Emissive")
+		.onChange((value: number) => {
+			updateGalleryEmissive(value);
+		});
+
 	planeFolder.open();
 
 	// Reflection folder
@@ -162,180 +177,86 @@ export const setupGUI = (): GUI => {
 
 	reflectionFolder.open();
 
-	// Light folder
-	const lightFolder = gui.addFolder("Light");
+	// Background Light Common Settings
+	const bgCommonFolder = gui.addFolder("BG Light Common");
 
-	lightFolder
-		.addColor(LIGHT_PARAMS, "color")
-		.name("Color")
-		.onChange((value: number) => {
-			updateGalleryLightUniform("uLightColor", (u) => {
-				(u.value as THREE.Color).setHex(value);
-			});
-		});
-
-	lightFolder
-		.add(LIGHT_PARAMS, "specularStrength", 0, 3, 0.05)
-		.name("Specular")
-		.onChange((value: number) => {
-			updateGalleryLightUniform("uSpecularStrength", (u) => {
-				u.value = value;
-			});
-		});
-
-	lightFolder
-		.add(LIGHT_PARAMS, "shininess", 1, 128, 1)
-		.name("Shininess")
-		.onChange((value: number) => {
-			updateGalleryLightUniform("uShininess", (u) => {
-				u.value = value;
-			});
-		});
-
-	lightFolder
-		.add(LIGHT_PARAMS, "ambient", 0, 1, 0.01)
-		.name("Ambient")
-		.onChange((value: number) => {
-			updateGalleryLightUniform("uAmbient", (u) => {
-				u.value = value;
-			});
-		});
-
-	lightFolder
-		.add(LIGHT_PARAMS, "attenuation", 0, 0.5, 0.005)
-		.name("Attenuation")
-		.onChange((value: number) => {
-			updateGalleryLightUniform("uAttenuation", (u) => {
-				u.value = value;
-			});
-		});
-
-	const posFolder = lightFolder.addFolder("Position");
-
-	const bindPos = (
-		key: "uLightPos1" | "uLightPos2",
-		axis: "x" | "y" | "z",
-		params: (typeof LIGHT_PARAMS)["pos1"],
-		name: string,
-	) => {
-		posFolder
-			.add(params, axis, -20, 20, 0.1)
-			.name(name)
-			.onChange((value: number) => {
-				updateGalleryLightUniform(key, (u) => {
-					(u.value as THREE.Vector3)[axis] = value;
-				});
-			});
-	};
-
-	bindPos("uLightPos1", "x", LIGHT_PARAMS.pos1, "L X");
-	bindPos("uLightPos1", "y", LIGHT_PARAMS.pos1, "L Y");
-	bindPos("uLightPos1", "z", LIGHT_PARAMS.pos1, "L Z");
-	bindPos("uLightPos2", "x", LIGHT_PARAMS.pos2, "R X");
-	bindPos("uLightPos2", "y", LIGHT_PARAMS.pos2, "R Y");
-	bindPos("uLightPos2", "z", LIGHT_PARAMS.pos2, "R Z");
-
-	lightFolder.open();
-
-	// Background Light folder
-	const bgLightFolder = gui.addFolder("Background Light");
-
-	bgLightFolder
-		.addColor(BACKGROUND_LIGHT_PARAMS, "colorL")
-		.name("Color")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightColorL", (u) => {
-				(u.value as THREE.Color).setHex(value);
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "intensity", 0, 3, 0.05)
-		.name("Intensity")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightIntensity", (u) => {
-				u.value = value;
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "radiusX", 0, 2, 0.01)
-		.name("Radius X")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightRadius", (u) => {
-				(u.value as THREE.Vector2).x = value;
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "radiusY", 0, 3, 0.01)
-		.name("Radius Y")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightRadius", (u) => {
-				(u.value as THREE.Vector2).y = value;
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "angleL", -90, 90, 1)
-		.name("Angle (deg)")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightAngleL", (u) => {
-				u.value = value;
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "biasL", -1, 1, 0.01)
-		.name("Bias")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightBiasL", (u) => {
-				u.value = value;
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "spreadL", -1, 1, 0.01)
-		.name("Spread")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightSpreadL", (u) => {
-				u.value = value;
-			});
-		});
-
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "blurRadius", 0, 20, 0.1)
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "blurRadius", 0, 30, 0.1)
 		.name("Blur");
 
-	bgLightFolder
-		.add(BACKGROUND_LIGHT_PARAMS, "falloff", 0.5, 6, 0.1)
-		.name("Falloff")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightFalloff", (u) => {
-				u.value = value;
-			});
-		});
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "use3D")
+		.name("Use 3D Mode");
 
-	const bgPosFolder = bgLightFolder.addFolder("Position (UV)");
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "clampToViewport")
+		.name("Clamp to Viewport");
 
-	bgPosFolder
-		.add(BACKGROUND_LIGHT_PARAMS.posL, "x", 0, 1, 0.01)
-		.name("X")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightPosL", (u) => {
-				(u.value as THREE.Vector2).x = value;
-			});
-		});
-	bgPosFolder
-		.add(BACKGROUND_LIGHT_PARAMS.posL, "y", 0, 1, 0.01)
-		.name("Y")
-		.onChange((value: number) => {
-			updateAtmosphereUniform("uLightPosL", (u) => {
-				(u.value as THREE.Vector2).y = value;
-			});
-		});
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "viewportPadding", 0, 0.5, 0.01)
+		.name("Viewport Padding");
 
-	bgLightFolder.open();
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "scaleByX")
+		.name("Scale by X");
+
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "scaleMin", 0, 1, 0.01)
+		.name("Scale Min (左端)");
+
+	bgCommonFolder
+		.add(BACKGROUND_LIGHT_PARAMS, "scaleMax", 1, 5, 0.1)
+		.name("Scale Max (右端)");
+
+	bgCommonFolder.open();
+
+	// 各ライトのフォルダを作成
+	const createLightFolder = (index: number, name: string) => {
+		const light = BACKGROUND_LIGHTS[index];
+		const folder = gui.addFolder(name);
+
+		folder.add(light, "enabled").name("Enabled");
+		folder.addColor(light, "colorL").name("Color");
+		folder.add(light, "intensity", 0, 3, 0.05).name("Intensity");
+		folder.add(light, "radiusX", 0, 2, 0.01).name("Radius X");
+		folder.add(light, "radiusY", 0, 2, 0.01).name("Radius Y");
+		folder.add(light, "angleL", -180, 180, 1).name("Angle");
+		folder.add(light, "biasL", -1, 1, 0.01).name("Bias");
+		folder.add(light, "biasRangeL", 0.1, 1, 0.01).name("Bias Range");
+		folder.add(light, "spreadL", -1, 1, 0.01).name("Spread");
+		folder.add(light, "falloff", 0.5, 6, 0.1).name("Falloff");
+
+		// 3D Position
+		const posFolder = folder.addFolder("Position 3D");
+		posFolder.add(light.pos3D, "x", -15, 15, 0.1).name("X");
+		posFolder.add(light.pos3D, "y", -10, 10, 0.1).name("Y");
+		posFolder.add(light.pos3D, "z", -10, 15, 0.1).name("Z");
+		posFolder.open();
+
+		// Spotlight Direction
+		const spotFolder = folder.addFolder("Spot Direction");
+		spotFolder.add(light, "spotAngleX", -180, 180, 1).name("Angle X");
+		spotFolder.add(light, "spotAngleY", -180, 180, 1).name("Angle Y");
+		spotFolder.add(light, "spotConeAngle", 10, 120, 1).name("Cone Angle");
+		spotFolder.open();
+
+		// 2D Position
+		const pos2DFolder = folder.addFolder("Position 2D");
+		pos2DFolder.add(light.posL, "x", 0, 1, 0.01).name("X");
+		pos2DFolder.add(light.posL, "y", 0, 1, 0.01).name("Y");
+		pos2DFolder.close();
+
+		return folder;
+	};
+
+	const light1Folder = createLightFolder(0, "Light 1 (Main)");
+	light1Folder.open();
+
+	const light2Folder = createLightFolder(1, "Light 2");
+	light2Folder.close();
+
+	const light3Folder = createLightFolder(2, "Light 3");
+	light3Folder.close();
 
 	return gui;
 };

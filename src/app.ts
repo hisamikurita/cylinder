@@ -12,6 +12,8 @@ import {
 	setupInteractions,
 	setupReflection,
 	startAnimationLoop,
+	updateFloorLightUniforms,
+	updateGalleryLightUniforms,
 	updateGalleryRotation,
 	updateParallax,
 } from "./webgl";
@@ -59,6 +61,8 @@ startAnimationLoop(
 	() => {
 		updateGalleryRotation();
 		updateParallax(planes);
+		updateGalleryLightUniforms();
+		updateFloorLightUniforms();
 	},
 	() => renderWithReflection(),
 );

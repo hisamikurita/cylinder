@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GALLERY, PLANE } from "./constants";
+import { BACKGROUND_LIGHTS, GALLERY, PLANE } from "./constants";
 import { createCurvedPlaneGeometry } from "./geometry";
 import { camera, scene } from "./core";
 import {
@@ -113,24 +113,13 @@ export const updateGallerySideColor = (color: number): void => {
 	}
 };
 
-type LightUniformKey =
-	| "uLightPos1"
-	| "uLightPos2"
-	| "uLightColor"
-	| "uSpecularStrength"
-	| "uShininess"
-	| "uAmbient"
-	| "uAttenuation";
-
-export const updateGalleryLightUniform = (
-	key: LightUniformKey,
-	updater: (uniform: THREE.IUniform) => void,
-): void => {
+export const updateGalleryEmissive = (intensity: number): void => {
 	for (const plane of galleryPlanes) {
 		const materials = plane.material as THREE.Material[];
 		const cover = materials[4] as THREE.ShaderMaterial;
-		const uniform = cover.uniforms[key];
-		if (uniform) updater(uniform);
+		if (cover.uniforms.uEmissive) {
+			cover.uniforms.uEmissive.value = intensity;
+		}
 	}
 };
 
@@ -155,5 +144,44 @@ export const updateParallax = (planes: THREE.Mesh[]): void => {
 		const materials = plane.material as THREE.Material[];
 		const coverMaterial = materials[4] as THREE.ShaderMaterial;
 		coverMaterial.uniforms.uParallaxOffset.value = offset;
+	}
+};
+
+export const updateGalleryLightUniforms = (): void => {
+	// 最初のライト（メインライト）を使用
+	const light = BACKGROUND_LIGHTS[0];
+	const pos3D = light.pos3D;
+	const lightPos = new THREE.Vector3(pos3D.x, pos3D.y, pos3D.z);
+	const lightColor = new THREE.Color(light.colorL);
+
+	// アングルからスポットライト方向を計算
+	const angleX = THREE.MathUtils.degToRad(light.spotAngleX);
+	const angleY = THREE.MathUtils.degToRad(light.spotAngleY);
+	const lightDir = new THREE.Vector3(0, 0, -1); // 基本方向: 前方
+	lightDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), angleX); // X軸回転（上下）
+	lightDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleY); // Y軸回転（左右）
+	lightDir.normalize();
+
+	for (const plane of galleryPlanes) {
+		const materials = plane.material as THREE.Material[];
+		const cover = materials[4] as THREE.ShaderMaterial;
+		if (cover.uniforms.uLightPos) {
+			cover.uniforms.uLightPos.value.copy(lightPos);
+		}
+		if (cover.uniforms.uLightDir) {
+			cover.uniforms.uLightDir.value.copy(lightDir);
+		}
+		if (cover.uniforms.uLightConeAngle) {
+			cover.uniforms.uLightConeAngle.value = light.spotConeAngle;
+		}
+		if (cover.uniforms.uLightColor) {
+			cover.uniforms.uLightColor.value.copy(lightColor);
+		}
+		if (cover.uniforms.uLightIntensity) {
+			cover.uniforms.uLightIntensity.value = light.enabled ? light.intensity : 0;
+		}
+		if (cover.uniforms.uCameraPos) {
+			cover.uniforms.uCameraPos.value.copy(camera.position);
+		}
 	}
 };

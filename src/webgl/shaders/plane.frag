@@ -11,15 +11,15 @@ uniform float uWaveStrength;
 uniform float uWaveFrequency;
 uniform float uWaveSpeed;
 uniform float uWaveSeed;
+uniform float uEmissive;
 
-// Light uniforms (Blinn-Phong)
-uniform vec3 uLightPos1;
-uniform vec3 uLightPos2;
+// Spotlight uniforms
+uniform vec3 uLightPos;
+uniform vec3 uLightDir;
+uniform float uLightConeAngle;
 uniform vec3 uLightColor;
-uniform float uSpecularStrength;
-uniform float uShininess;
-uniform float uAmbient;
-uniform float uAttenuation;
+uniform float uLightIntensity;
+uniform vec3 uCameraPos;
 
 // Fog uniforms
 uniform vec3 fogColor;
@@ -103,6 +103,7 @@ vec3 linearToSRGB(vec3 color) {
 
 void main() {
 	vec4 color;
+	bool isImage = false;
 
 	// 裏面は白色
 	if (!gl_FrontFacing) {
@@ -144,38 +145,46 @@ void main() {
 			}
 
 			color = texture2D(uTexture, uv);
+			isImage = true;
 		}
 	}
 
-	// Blinn-Phong ライティング（拡散 + 距離減衰 + 鏡面）
-	vec3 N = normalize(vWorldNormal);
-	vec3 V = normalize(cameraPosition - vWorldPos);
+	// エミッシブ（画像部分のみ発光）
+	vec3 emissive = isImage ? color.rgb * uEmissive : vec3(0.0);
 
-	vec3 L1v = uLightPos1 - vWorldPos;
-	vec3 L2v = uLightPos2 - vWorldPos;
-	float d1 = length(L1v);
-	float d2 = length(L2v);
-	vec3 L1 = L1v / max(d1, 0.0001);
-	vec3 L2 = L2v / max(d2, 0.0001);
+	// Spotlight lighting（表面のみ）
+	vec3 lighting = vec3(0.0);
+	if (gl_FrontFacing) {
+		vec3 N = normalize(vWorldNormal);
+		vec3 toSurface = vWorldPos - uLightPos;
+		vec3 L = normalize(-toSurface);
+		vec3 V = normalize(uCameraPos - vWorldPos);
+		vec3 H = normalize(L + V);
 
-	// 距離による強度減衰
-	float atten1 = 1.0 / (1.0 + uAttenuation * d1 * d1);
-	float atten2 = 1.0 / (1.0 + uAttenuation * d2 * d2);
+		// Spotlight cone falloff
+		float cosAngle = dot(normalize(toSurface), normalize(uLightDir));
+		float cosCone = cos(radians(uLightConeAngle));
+		float cosOuter = cos(radians(uLightConeAngle * 1.3)); // 外側エッジ
+		float spotFactor = smoothstep(cosOuter, cosCone, cosAngle);
 
-	// 拡散光（Lambert）
-	float diff1 = max(dot(N, L1), 0.0) * atten1;
-	float diff2 = max(dot(N, L2), 0.0) * atten2;
+		// Diffuse
+		float NdotL = max(dot(N, L), 0.0);
+		vec3 diffuse = uLightColor * NdotL;
 
-	// 鏡面（ハーフベクトル方式）
-	float s1 = pow(max(dot(N, normalize(L1 + V)), 0.0), uShininess) * atten1;
-	float s2 = pow(max(dot(N, normalize(L2 + V)), 0.0), uShininess) * atten2;
-	vec3 spec = (s1 + s2) * uLightColor * uSpecularStrength;
+		// Specular (Blinn-Phong)
+		float NdotH = max(dot(N, H), 0.0);
+		float spec = pow(NdotH, 32.0);
+		vec3 specular = uLightColor * spec * 0.5;
 
-	// 照度：環境光 + 拡散光。ライトが届いていないところは uAmbient のみ
-	vec3 lit = vec3(uAmbient) + (diff1 + diff2) * uLightColor;
+		// Distance attenuation
+		float dist = length(toSurface);
+		float attenuation = 1.0 / (1.0 + 0.02 * dist * dist);
 
-	// Apply fog (brightnessはフォグミックス前に掛ける：フォグに沈んだ部分は背景色と一致させる)
+		lighting = (diffuse + specular) * uLightIntensity * attenuation * spotFactor;
+	}
+
+	// Apply fog
 	float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
-	vec3 rgb = mix((color.rgb * lit + spec) * uBrightness, fogColor, fogFactor);
+	vec3 rgb = mix((color.rgb + emissive + lighting) * uBrightness, fogColor, fogFactor);
 	gl_FragColor = vec4(rgb, color.a);
 }

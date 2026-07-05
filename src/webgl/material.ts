@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { LIGHT_PARAMS, PARALLAX, PLANE } from "./constants";
+import { BACKGROUND_LIGHTS, EMISSIVE_PARAMS, PARALLAX, PLANE } from "./constants";
 import fragmentShader from "./shaders/plane.frag?raw";
 import vertexShader from "./shaders/plane.vert?raw";
 
@@ -23,25 +23,18 @@ export const createCoverMaterial = (
 			uWaveFrequency: { value: 0 },
 			uWaveSpeed: { value: 0 },
 			uWaveSeed: { value: 0 },
-			uLightPos1: {
-				value: new THREE.Vector3(
-					LIGHT_PARAMS.pos1.x,
-					LIGHT_PARAMS.pos1.y,
-					LIGHT_PARAMS.pos1.z,
-				),
-			},
-			uLightPos2: {
-				value: new THREE.Vector3(
-					LIGHT_PARAMS.pos2.x,
-					LIGHT_PARAMS.pos2.y,
-					LIGHT_PARAMS.pos2.z,
-				),
-			},
-			uLightColor: { value: new THREE.Color(LIGHT_PARAMS.color) },
-			uSpecularStrength: { value: LIGHT_PARAMS.specularStrength },
-			uShininess: { value: LIGHT_PARAMS.shininess },
-			uAmbient: { value: LIGHT_PARAMS.ambient },
-			uAttenuation: { value: LIGHT_PARAMS.attenuation },
+			uEmissive: { value: EMISSIVE_PARAMS.intensity },
+			// Spotlight（最初のライトを使用）
+			uLightPos: { value: new THREE.Vector3(
+				BACKGROUND_LIGHTS[0].pos3D.x,
+				BACKGROUND_LIGHTS[0].pos3D.y,
+				BACKGROUND_LIGHTS[0].pos3D.z,
+			) },
+			uLightDir: { value: new THREE.Vector3(0, 0, -1) }, // スポットライト方向
+			uLightConeAngle: { value: BACKGROUND_LIGHTS[0].spotConeAngle },
+			uLightColor: { value: new THREE.Color(BACKGROUND_LIGHTS[0].colorL) },
+			uLightIntensity: { value: BACKGROUND_LIGHTS[0].intensity },
+			uCameraPos: { value: new THREE.Vector3() },
 			...THREE.UniformsLib.fog,
 		},
 		vertexShader,

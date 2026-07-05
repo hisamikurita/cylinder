@@ -45,6 +45,11 @@ export const PLANE = {
 	SIDE_COLOR: 0x0d0d0d,
 } as const;
 
+// Emissive (画像の発光)
+export const EMISSIVE_PARAMS = {
+	intensity: 0,
+};
+
 // Scene
 export const SCENE = {
 	BACKGROUND_COLOR: 0x000000,
@@ -59,41 +64,81 @@ export const FOG = {
 
 // Reflection
 export const REFLECTION_PARAMS = {
-	brightness: 0.40,
-	blurRadius: 2.0,
-	waveStrength: 0.070,
-	waveFrequency: 4.0,
+	brightness: 0.22,
+	blurRadius: 2,
+	waveStrength: 0.07,
+	waveFrequency: 4,
 	waveSpeed: 0.6,
 };
 
-// Background side glows (screen-space)
+// Background side glows
 // radiusX を狭く radiusY を大きくすると縦ストライプ、angle で傾けられる
 export const BACKGROUND_LIGHT_PARAMS = {
-	posL: { x: 0.19, y: 0.84 },
-	colorL: 0x969bc0,
-	intensity: 0.55,
-	radiusX: 0.42,
-	radiusY: 1.4,
-	falloff: 2.2,
-	angleL: 46, // 角度（度、時計回り正）
-	// 左右方向の濃淡バイアス（回転後ローカル空間）: +1 = 右側が濃く左側が薄い、-1 = 逆、0 = 対称
-	biasL: 0.8,
-	// 縦方向の広がり: +1 = 右にいくほど広がる、-1 = 左にいくほど広がる、0 = 均一
-	spreadL: 0.7,
-	// ライト全体にかけるブラー（ピクセル単位、0=なし）
-	blurRadius: 6.0,
+	// 共通設定
+	blurRadius: 8.3,
+	// 3D位置モード共通設定
+	use3D: true,
+	clampToViewport: true,
+	viewportPadding: 0.09,
+	scaleByX: true,
+	scaleMin: 0.1,
+	scaleMax: 2.0,
 };
 
-// Spot Light (Blinn-Phong on plane material)
-export const LIGHT_PARAMS = {
-	pos1: { x: -8, y: 4, z: 11.1 },
-	pos2: { x: 8, y: 4, z: 2 },
-	color: 0xfcfcfc,
-	specularStrength: 3.0,
-	shininess: 8,
-	ambient: 0.32, // 非照射面の下地明度
-	attenuation: 0.04, // 距離減衰の強さ（大きいほどライトが早く暗くなる）
-};
+// 3つのライト設定
+export const BACKGROUND_LIGHTS = [
+	{
+		enabled: true,
+		pos3D: { x: -5.4, y: 2.9, z: 7.5 },
+		spotAngleX: -20,
+		spotAngleY: -90,
+		spotConeAngle: 44,
+		posL: { x: 0.15, y: 0.7 },
+		colorL: 0xfffafa,
+		intensity: 0.85,
+		radiusX: 0.8,
+		radiusY: 0.25,
+		falloff: 3.8,
+		angleL: -50,
+		biasL: 0.34,
+		biasRangeL: 0.5,
+		spreadL: 0.06,
+	},
+	{
+		enabled: true,
+		pos3D: { x: -7.0, y: 3.5, z: 6.5 },
+		spotAngleX: -25,
+		spotAngleY: -100,
+		spotConeAngle: 40,
+		posL: { x: 0.08, y: 0.75 },
+		colorL: 0xfafaff,
+		intensity: 0.6,
+		radiusX: 0.6,
+		radiusY: 0.2,
+		falloff: 4.0,
+		angleL: -55,
+		biasL: 0.3,
+		biasRangeL: 0.5,
+		spreadL: 0.04,
+	},
+	{
+		enabled: true,
+		pos3D: { x: -8.5, y: 4.0, z: 5.5 },
+		spotAngleX: -30,
+		spotAngleY: -110,
+		spotConeAngle: 35,
+		posL: { x: 0.03, y: 0.8 },
+		colorL: 0xf5f5ff,
+		intensity: 0.4,
+		radiusX: 0.4,
+		radiusY: 0.15,
+		falloff: 4.2,
+		angleL: -60,
+		biasL: 0.25,
+		biasRangeL: 0.5,
+		spreadL: 0.02,
+	},
+];
 
 // Camera
 export const CAMERA = {
