@@ -3,15 +3,17 @@ import {
 	BACKGROUND_LIGHTS,
 	EMISSIVE_PARAMS,
 	GALLERY,
+	PARALLAX,
 	PLANE,
 	VIGNETTE_PARAMS,
 } from "./constants";
-import { createCurvedPlaneGeometry } from "./geometry";
 import { camera, scene } from "./core";
-import {
-	createCoverMaterial,
-	updateCoverMaterialImageSize,
-} from "./material";
+import { createCurvedPlaneGeometry } from "./geometry";
+import { createCoverMaterial, updateCoverMaterialImageSize } from "./material";
+
+export type MediaItem =
+	| { type: "image"; url: string }
+	| { type: "video"; url: string; targetAspect?: number };
 
 export interface GalleryOptions {
 	radius: number;
@@ -35,8 +37,36 @@ export let galleryGroup: THREE.Group;
 export let gallerySideMaterial: THREE.MeshBasicMaterial;
 export let galleryPlanes: THREE.Mesh[] = [];
 
+// zoomIn/zoomOut でスポットライトの色をフェードするための係数
+// (updateGalleryLightUniforms が毎フレーム上書きするため、掛け合わせる形にする)
+export const galleryLightFade = { value: 1 };
+
+const createVideoTexture = (
+	url: string,
+	onMetadata: (width: number, height: number) => void,
+): THREE.VideoTexture => {
+	const video = document.createElement("video");
+	video.src = url;
+	video.crossOrigin = "anonymous";
+	video.loop = true;
+	video.muted = true;
+	video.playsInline = true;
+	video.autoplay = true;
+	video.addEventListener("loadedmetadata", () => {
+		onMetadata(video.videoWidth, video.videoHeight);
+	});
+	// ユーザー操作前でも autoplay できるよう明示的に play を呼ぶ (muted なので許可される)
+	void video.play().catch(() => {
+		/* autoplay ブロック時はサイレントに握りつぶす */
+	});
+
+	const texture = new THREE.VideoTexture(video);
+	texture.colorSpace = THREE.SRGBColorSpace;
+	return texture;
+};
+
 export const createGallery = (
-	imagePaths: string[],
+	items: MediaItem[],
 	options: Partial<GalleryOptions> = {},
 ): THREE.Mesh[] => {
 	const opts = { ...defaultOptions, ...options };
@@ -47,7 +77,9 @@ export const createGallery = (
 	galleryGroup.position.y = GALLERY.OFFSET_Y;
 	galleryGroup.position.z = GALLERY.OFFSET_Z;
 
-	gallerySideMaterial = new THREE.MeshBasicMaterial({ color: PLANE.SIDE_COLOR });
+	gallerySideMaterial = new THREE.MeshBasicMaterial({
+		color: PLANE.SIDE_COLOR,
+	});
 	const sideMaterial = gallerySideMaterial;
 
 	for (let i = 0; i < opts.imageCount; i++) {
@@ -59,19 +91,29 @@ export const createGallery = (
 			opts.segments,
 		);
 
-		const texture = textureLoader.load(imagePaths[i], (loadedTexture) => {
-			updateCoverMaterialImageSize(
-				coverMaterial,
-				loadedTexture.image.width,
-				loadedTexture.image.height,
-			);
-		});
+		const item = items[i];
+		const texture =
+			item.type === "video"
+				? createVideoTexture(item.url, (w, h) =>
+						updateCoverMaterialImageSize(coverMaterial, w, h),
+					)
+				: textureLoader.load(item.url, (loadedTexture) => {
+						updateCoverMaterialImageSize(
+							coverMaterial,
+							loadedTexture.image.width,
+							loadedTexture.image.height,
+						);
+					});
 
 		const coverMaterial = createCoverMaterial(
 			texture,
 			opts.planeWidth,
 			opts.planeHeight,
 		);
+		if (item.type === "video") {
+			coverMaterial.uniforms.uTargetAspect.value =
+				item.targetAspect ?? PARALLAX.VIDEO_TARGET_ASPECT;
+		}
 		// プレーンごとに固有の seed を割り当てて波の位相をずらす
 		coverMaterial.uniforms.uWaveSeed.value = i * 0.3731 + Math.random() * 0.1;
 
@@ -187,10 +229,14 @@ export const updateGalleryLightUniforms = (): void => {
 			cover.uniforms.uLightConeAngle.value = light.spotConeAngle;
 		}
 		if (cover.uniforms.uLightColor) {
-			cover.uniforms.uLightColor.value.copy(lightColor);
+			cover.uniforms.uLightColor.value
+				.copy(lightColor)
+				.multiplyScalar(galleryLightFade.value);
 		}
 		if (cover.uniforms.uLightIntensity) {
-			cover.uniforms.uLightIntensity.value = light.enabled ? light.intensity : 0;
+			cover.uniforms.uLightIntensity.value = light.enabled
+				? light.intensity
+				: 0;
 		}
 		if (cover.uniforms.uCameraPos) {
 			cover.uniforms.uCameraPos.value.copy(camera.position);

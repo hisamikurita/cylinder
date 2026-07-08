@@ -1,8 +1,9 @@
 uniform sampler2D uTexture;
 uniform vec2 uPlaneSize;
 uniform vec2 uImageSize;
+uniform float uTargetAspect; // >0: このアスペクトに見せかけて上下クロップ / 0: 実アスペクトそのまま
 uniform float uParallaxOffset; // -1.0 ~ 1.0
-uniform float uParallaxScale; // 1.0 ~ 1.25+
+uniform float uParallaxIntensity; // 0.0 (off) ~ 1.0 (full natural margin)
 uniform float uBorderWidth;
 uniform vec3 uBorderColor;
 uniform float uBrightness;
@@ -120,26 +121,29 @@ void main() {
 			vUv.y < borderUV.y || vUv.y > 1.0 - borderUV.y) {
 			color = vec4(linearToSRGB(uBorderColor), 1.0);
 		} else {
-			vec2 planeAspect = vec2(uPlaneSize.x / uPlaneSize.y, 1.0);
-			vec2 imageAspect = vec2(uImageSize.x / uImageSize.y, 1.0);
+			float planeAspect = uPlaneSize.x / uPlaneSize.y;
+			float realAspect = uImageSize.x / uImageSize.y;
+			// uTargetAspect > 0 の場合はそのアスペクトを"見せかけ"として使い、
+			// 実テクスチャを上下でクロップして横長に見せる（動画で 21:9 を偽装するのに使う）
+			float effectiveAspect = uTargetAspect > 0.0 ? uTargetAspect : realAspect;
+			float cropY = realAspect / effectiveAspect;
 
 			vec2 scale;
-			if (planeAspect.x > imageAspect.x) {
+			if (planeAspect > effectiveAspect) {
 				// プレーンが横長 → 幅に合わせる
-				scale = vec2(1.0, imageAspect.x / planeAspect.x);
+				scale = vec2(1.0, effectiveAspect / planeAspect);
 			} else {
 				// プレーンが縦長 → 高さに合わせる
-				scale = vec2(planeAspect.x / imageAspect.x, 1.0);
+				scale = vec2(planeAspect / effectiveAspect, 1.0);
 			}
 
-			// パララックススケールで拡大（scaleを小さくする）
-			scale /= uParallaxScale;
-
-			// パララックスオフセット（余白の範囲内で移動）
-			float maxOffset = (uParallaxScale - 1.0) / uParallaxScale * 0.5;
-			float offsetX = uParallaxOffset * maxOffset * 2.0;
+			// パララックスオフセット: cover 収まりで残る自然な横余白の範囲内で移動する
+			float maxOffset = (1.0 - scale.x) * 0.5;
+			float offsetX = uParallaxOffset * maxOffset * uParallaxIntensity;
 
 			vec2 uv = (vUv - 0.5) * scale + 0.5 + vec2(offsetX, 0.0);
+			// 実テクスチャの上下クロップ (cropY=1 のときは no-op)
+			uv.y = (uv.y - 0.5) * cropY + 0.5;
 
 			// テクスチャサンプル位置にノイズによる波紋を加算（反射時のみ）
 			if (uWaveStrength > 0.0) {

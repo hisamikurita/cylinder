@@ -59,7 +59,9 @@ const setupPostprocessing = (): void => {
 	compositeMaterial = new THREE.ShaderMaterial({
 		uniforms: {
 			tDiffuse: { value: null },
-			uLightPos: { value: new THREE.Vector3(light.pos3D.x, light.pos3D.y, light.pos3D.z) },
+			uLightPos: {
+				value: new THREE.Vector3(light.pos3D.x, light.pos3D.y, light.pos3D.z),
+			},
 			uLightDir: { value: new THREE.Vector3(0, 0, -1) },
 			uLightConeAngle: { value: light.spotConeAngle },
 			uLightColor: { value: new THREE.Color(light.colorL) },
@@ -85,13 +87,20 @@ const setupPostprocessing = (): void => {
 export const setupReflection = (): void => {
 	// 床面のジオメトリとマテリアル（ライティング対応）
 	// segments を細かくすることで頂点シェーダの curve deformation が滑らかに効く
-	const floorGeometry = new THREE.PlaneGeometry(FLOOR_WIDTH, FLOOR_DEPTH, 96, 64);
+	const floorGeometry = new THREE.PlaneGeometry(
+		FLOOR_WIDTH,
+		FLOOR_DEPTH,
+		96,
+		64,
+	);
 	const light = BACKGROUND_LIGHTS[0];
 
 	floorMaterial = new THREE.ShaderMaterial({
 		uniforms: {
 			uBaseColor: { value: new THREE.Color(SCENE.BACKGROUND_COLOR) },
-			uLightPos: { value: new THREE.Vector3(light.pos3D.x, light.pos3D.y, light.pos3D.z) },
+			uLightPos: {
+				value: new THREE.Vector3(light.pos3D.x, light.pos3D.y, light.pos3D.z),
+			},
 			uLightDir: { value: new THREE.Vector3(0, 0, -1) },
 			uLightConeAngle: { value: light.spotConeAngle },
 			uLightColor: { value: new THREE.Color(light.colorL) },
@@ -145,11 +154,14 @@ export const updateFloorLightUniforms = (): void => {
 	floorMaterial.uniforms.uLightDir.value.copy(lightDir);
 	floorMaterial.uniforms.uLightConeAngle.value = light.spotConeAngle;
 	floorMaterial.uniforms.uLightColor.value.copy(lightColor);
-	floorMaterial.uniforms.uLightIntensity.value = light.enabled ? light.intensity : 0;
+	floorMaterial.uniforms.uLightIntensity.value = light.enabled
+		? light.intensity
+		: 0;
 	floorMaterial.uniforms.uCameraPos.value.copy(camera.position);
 
 	// 動的パラメータ
-	floorMaterial.uniforms.uTime.value = performance.now() / 1000 * FLOOR_PARAMS.noiseSpeed;
+	floorMaterial.uniforms.uTime.value =
+		(performance.now() / 1000) * FLOOR_PARAMS.noiseSpeed;
 	floorMaterial.uniforms.uCurvePower.value = FLOOR_PARAMS.curvePower;
 	floorMaterial.uniforms.uCurveHeight.value = FLOOR_PARAMS.curveHeight;
 	floorMaterial.uniforms.uNoiseScale.value = FLOOR_PARAMS.noiseScale;
@@ -297,14 +309,25 @@ export const renderWithReflection = (
 
 	// inverseViewProjection行列を計算
 	const viewProjection = new THREE.Matrix4();
-	viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+	viewProjection.multiplyMatrices(
+		camera.projectionMatrix,
+		camera.matrixWorldInverse,
+	);
 	const inverseViewProjection = viewProjection.invert();
 
-	compositeMaterial.uniforms.uLightPos.value.set(light.pos3D.x, light.pos3D.y, light.pos3D.z);
+	compositeMaterial.uniforms.uLightPos.value.set(
+		light.pos3D.x,
+		light.pos3D.y,
+		light.pos3D.z,
+	);
 	compositeMaterial.uniforms.uLightDir.value.copy(lightDir);
 	compositeMaterial.uniforms.uLightConeAngle.value = light.spotConeAngle;
-	compositeMaterial.uniforms.uLightIntensity.value = light.enabled ? light.intensity : 0;
-	compositeMaterial.uniforms.uInverseViewProjection.value.copy(inverseViewProjection);
+	compositeMaterial.uniforms.uLightIntensity.value = light.enabled
+		? light.intensity
+		: 0;
+	compositeMaterial.uniforms.uInverseViewProjection.value.copy(
+		inverseViewProjection,
+	);
 	compositeMaterial.uniforms.uCameraPos.value.copy(camera.position);
 
 	fullscreenMesh.material = compositeMaterial;

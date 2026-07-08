@@ -20,7 +20,8 @@ export const createCoverMaterial = (
 			uPlaneSize: { value: new THREE.Vector2(planeWidth, planeHeight) },
 			uImageSize: { value: new THREE.Vector2(1, 1) },
 			uParallaxOffset: { value: 0 },
-			uParallaxScale: { value: PARALLAX.SCALE },
+			uParallaxIntensity: { value: PARALLAX.INTENSITY },
+			uTargetAspect: { value: 0 },
 			uBorderWidth: { value: PLANE.DEPTH },
 			uBorderColor: { value: new THREE.Color(PLANE.SIDE_COLOR) },
 			uBrightness: { value: 1.0 },
@@ -34,11 +35,13 @@ export const createCoverMaterial = (
 			uVignettePower: { value: VIGNETTE_PARAMS.power },
 			uVignetteColor: { value: new THREE.Color(VIGNETTE_PARAMS.color) },
 			// Spotlight（最初のライトを使用）
-			uLightPos: { value: new THREE.Vector3(
-				BACKGROUND_LIGHTS[0].pos3D.x,
-				BACKGROUND_LIGHTS[0].pos3D.y,
-				BACKGROUND_LIGHTS[0].pos3D.z,
-			) },
+			uLightPos: {
+				value: new THREE.Vector3(
+					BACKGROUND_LIGHTS[0].pos3D.x,
+					BACKGROUND_LIGHTS[0].pos3D.y,
+					BACKGROUND_LIGHTS[0].pos3D.z,
+				),
+			},
 			uLightDir: { value: new THREE.Vector3(0, 0, -1) }, // スポットライト方向
 			uLightConeAngle: { value: BACKGROUND_LIGHTS[0].spotConeAngle },
 			uLightColor: { value: new THREE.Color(BACKGROUND_LIGHTS[0].colorL) },

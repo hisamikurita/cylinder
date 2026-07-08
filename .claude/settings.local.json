@@ -6,7 +6,9 @@
       "Bash(pnpm tsc *)",
       "Bash(npm run build:*)",
       "Bash(npx tsc:*)",
-      "Bash(VITE_BASE=/cylinder/ pnpm build)"
+      "Bash(VITE_BASE=/cylinder/ pnpm build)",
+      "WebFetch(domain:www.pexels.com)",
+      "Bash(npx biome *)"
     ]
   }
 }

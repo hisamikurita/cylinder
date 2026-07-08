@@ -1,9 +1,10 @@
 import gsap from "gsap";
 import * as THREE from "three";
-import { DURATION, EASING, PARALLAX, PLANE } from "./constants";
-import type { CurvedPlaneData } from "./geometry";
+import { DURATION, EASING, GALLERY, PARALLAX, PLANE } from "./constants";
 import { camera, orbitControls, renderer } from "./core";
+import { galleryGroup, galleryLightFade } from "./Gallery";
 import {
+	getIsDragging,
 	getWasDragged,
 	resetTiltAndSway,
 	restoreTiltAndSway,
@@ -12,6 +13,7 @@ import {
 	setMouseMoveEnabled,
 	setRotationPaused,
 } from "./galleryRotation";
+import type { CurvedPlaneData } from "./geometry";
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -19,13 +21,28 @@ const mouse = new THREE.Vector2();
 let targetPlanes: THREE.Mesh[] = [];
 let isZoomed = false;
 let activePlane: THREE.Mesh | null = null;
-const originalCameraPosition = new THREE.Vector3();
-const originalControlsTarget = new THREE.Vector3();
+// zoomOut で復元するために保存する galleryGroup の元の姿勢
+let originalGalleryRotationY = 0;
+let originalGalleryPositionZ = 0;
 
 export const setupInteractions = (planes: THREE.Mesh[]): void => {
 	targetPlanes = planes;
 	renderer.domElement.addEventListener("click", onClick);
+	renderer.domElement.addEventListener("mousemove", onHoverMove);
 	window.addEventListener("resize", onResize);
+};
+
+// プレーン hover 時のカーソル切り替え。ドラッグ中は galleryRotation 側で
+// "grabbing" が設定されているので触らない
+const onHoverMove = (event: MouseEvent): void => {
+	if (getIsDragging()) return;
+
+	mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+	mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+	raycaster.setFromCamera(mouse, camera);
+	const intersects = raycaster.intersectObjects(targetPlanes);
+	renderer.domElement.style.cursor = intersects.length > 0 ? "pointer" : "";
 };
 
 const onResize = (): void => {
@@ -35,28 +52,11 @@ const onResize = (): void => {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 
-	// ワールド座標を取得
-	const planePosition = new THREE.Vector3();
-	activePlane.getWorldPosition(planePosition);
-
-	const worldQuaternion = new THREE.Quaternion();
-	activePlane.getWorldQuaternion(worldQuaternion);
-	const planeNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(
-		worldQuaternion,
-	);
-
-	// 新しいビューポートサイズでカメラ距離を再計算
+	// 新しいビューポートサイズで必要な距離を再計算し、ギャラリーを z 方向に移動
 	const geometry = activePlane.geometry as THREE.BoxGeometry;
 	const params = geometry.parameters;
 	const distance = calculateCameraDistance(params.width, params.height);
-
-	const targetPosition = planePosition
-		.clone()
-		.add(planeNormal.multiplyScalar(distance));
-
-	// 即座に更新
-	camera.position.copy(targetPosition);
-	orbitControls.target.copy(planePosition);
+	galleryGroup.position.z = camera.position.z - distance - GALLERY.RADIUS;
 };
 
 const onClick = (event: MouseEvent): void => {
@@ -101,69 +101,63 @@ const calculateCameraDistance = (
 };
 
 const zoomIn = (plane: THREE.Mesh): void => {
-	originalCameraPosition.copy(camera.position);
-	originalControlsTarget.copy(orbitControls.target);
 	activePlane = plane;
+	// zoomOut で復元するために保存
+	originalGalleryRotationY = galleryGroup.rotation.y;
+	originalGalleryPositionZ = galleryGroup.position.z;
 
 	// 先にtilt/swayをリセット（座標計算前に必要）
 	setMouseMoveEnabled(false);
 	resetTiltAndSway();
 
-	// リセット後のワールド座標を計算
-	// galleryGroupのposition=(0,0,0), rotation.x=0 として計算
-	const galleryRotationY = plane.parent?.rotation.y ?? 0;
-	const groupQuaternion = new THREE.Quaternion().setFromEuler(
-		new THREE.Euler(0, galleryRotationY, 0),
-	);
+	// プレーンの円筒内角度 α (ローカル座標から)
+	// カメラ正面 (world x=0, world z=+R) に持ってくる回転は β = α - π/2
+	const planeAngle = Math.atan2(plane.position.z, plane.position.x);
+	const rawTargetY = planeAngle - Math.PI / 2;
+	// 最短角度差で回す
+	const currentY = galleryGroup.rotation.y;
+	const twoPi = Math.PI * 2;
+	let diff = (((rawTargetY - currentY) % twoPi) + twoPi) % twoPi;
+	if (diff > Math.PI) diff -= twoPi;
+	const targetRotationY = currentY + diff;
 
-	// ローカル座標をワールド座標に変換
-	const planePosition = plane.position.clone().applyQuaternion(groupQuaternion);
-
-	// プレーンの向きを計算
-	const localQuaternion = new THREE.Quaternion().setFromEuler(plane.rotation);
-	const worldQuaternion = groupQuaternion.clone().multiply(localQuaternion);
-	const planeNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(
-		worldQuaternion,
-	);
-
-	// プレーンサイズからカメラ距離を計算
+	// プレーンをビューポートに収めるための距離を計算し、
+	// galleryGroup を z 方向に前後させて距離を合わせる (カメラは動かさない)
 	const geometry = plane.geometry as THREE.BoxGeometry;
 	const params = geometry.parameters;
 	const distance = calculateCameraDistance(params.width, params.height);
-
-	const targetPosition = planePosition
-		.clone()
-		.add(planeNormal.multiplyScalar(distance));
+	const targetPositionZ = camera.position.z - distance - GALLERY.RADIUS;
 
 	orbitControls.enabled = false;
 
-	gsap.to(camera.position, {
-		x: targetPosition.x,
-		y: targetPosition.y,
-		z: targetPosition.z,
+	gsap.to(galleryGroup.rotation, {
+		y: targetRotationY,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
 	});
 
-	gsap.to(orbitControls.target, {
-		x: planePosition.x,
-		y: planePosition.y,
-		z: planePosition.z,
+	gsap.to(galleryGroup.position, {
+		z: targetPositionZ,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
 	});
 
 	morphToFlat(plane);
 
-	// パララックススケールを1に戻し、ボーダーを消す
+	// パララックスを止め、ボーダーを消す
 	const materials = plane.material as THREE.Material[];
 	const coverMaterial = materials[4] as THREE.ShaderMaterial;
-	gsap.to(coverMaterial.uniforms.uParallaxScale, {
-		value: 1,
+	gsap.to(coverMaterial.uniforms.uParallaxIntensity, {
+		value: 0,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
 	});
 	gsap.to(coverMaterial.uniforms.uBorderWidth, {
+		value: 0,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+	});
+	gsap.to(galleryLightFade, {
 		value: 0,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
@@ -176,28 +170,28 @@ const zoomIn = (plane: THREE.Mesh): void => {
 };
 
 const zoomOut = (): void => {
-	gsap.to(camera.position, {
-		x: originalCameraPosition.x,
-		y: originalCameraPosition.y,
-		z: originalCameraPosition.z,
+	// galleryGroup を元の姿勢に戻す (カメラは動かさない)
+	// unpause は onComplete で行う。tween 中に unpause すると updateGalleryRotation の
+	// 内挿 (rotation.y += (targetRotation - rotation.y) * 0.1) が gsap tween と競合して
+	// "ぐいっと" 引っ張られる。(onMouseMoveTilt 側は overwrite:"auto" にしたので、
+	// rotation.y / position.z の tween は同時に走っていても kill されない)
+	gsap.to(galleryGroup.rotation, {
+		y: originalGalleryRotationY,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
-	});
-
-	gsap.to(orbitControls.target, {
-		x: originalControlsTarget.x,
-		y: originalControlsTarget.y,
-		z: originalControlsTarget.z,
-		duration: DURATION.BASE,
-		ease: EASING.TRANSFORM,
+		onComplete: () => {
+			setAutoRotating(true);
+			setDragEnabled(true);
+			setRotationPaused(false);
+		},
 	});
 
 	if (activePlane) {
-		// パララックススケールとボーダーを元に戻す
+		// パララックスとボーダーを元に戻す
 		const materials = activePlane.material as THREE.Material[];
 		const coverMaterial = materials[4] as THREE.ShaderMaterial;
-		gsap.to(coverMaterial.uniforms.uParallaxScale, {
-			value: PARALLAX.SCALE,
+		gsap.to(coverMaterial.uniforms.uParallaxIntensity, {
+			value: PARALLAX.INTENSITY,
 			duration: DURATION.BASE,
 			ease: EASING.TRANSFORM,
 		});
@@ -206,16 +200,25 @@ const zoomOut = (): void => {
 			duration: DURATION.BASE,
 			ease: EASING.TRANSFORM,
 		});
+		gsap.to(galleryLightFade, {
+			value: 1,
+			duration: DURATION.BASE,
+			ease: EASING.TRANSFORM,
+		});
 
 		morphToCurved(activePlane);
 		activePlane = null;
 	}
 
-	setAutoRotating(true);
-	setDragEnabled(true);
-	setRotationPaused(false);
 	setMouseMoveEnabled(true);
+	// restoreTiltAndSway は galleryGroup.position を overwrite:true で書き換えるので、
+	// 先に呼んでから z を戻す (順序を逆にすると z tween が kill される)
 	restoreTiltAndSway();
+	gsap.to(galleryGroup.position, {
+		z: originalGalleryPositionZ,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+	});
 	isZoomed = false;
 };
 

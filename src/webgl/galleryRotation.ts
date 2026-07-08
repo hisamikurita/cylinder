@@ -49,18 +49,21 @@ const onMouseMoveTilt = (event: MouseEvent): void => {
 	const normalizedX = (event.clientX / window.innerWidth) * 2 - 1;
 	const targetPosX = normalizedX * GALLERY.SWAY_X;
 
+	// overwrite:"auto" にすることで、同じプロパティ (rotation.x / position.x) の
+	// 過去 tween だけを kill する。他プロパティ (rotation.y や position.z) の tween
+	// (zoomOut などで動作中) は生かしたまま tilt/sway を上書きできる
 	gsap.to(galleryGroup.rotation, {
 		x: targetTiltX,
 		duration: DURATION.BASE,
 		ease: "power1.out",
-		overwrite: true,
+		overwrite: "auto",
 	});
 
 	gsap.to(galleryGroup.position, {
 		x: targetPosX,
 		duration: DURATION.BASE,
 		ease: "power1.out",
-		overwrite: true,
+		overwrite: "auto",
 	});
 
 	// 円筒と一緒に床も傾ける (床は初期 rotation.x = -PI/2)

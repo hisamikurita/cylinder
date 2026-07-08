@@ -14,8 +14,11 @@ export const EASING = {
 } as const;
 
 // Parallax
+// INTENSITY: 0 = 無効, 1 = 画像の自然な横余白いっぱいまで振れる
+// VIDEO_TARGET_ASPECT: 16:9 動画を擬似的に横長化してパララックスを効かせるための目標アスペクト
 export const PARALLAX = {
-	SCALE: 1.35,
+	INTENSITY: 1.0,
+	VIDEO_TARGET_ASPECT: 21 / 9,
 } as const;
 
 // Gallery Rotation

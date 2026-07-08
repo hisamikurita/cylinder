@@ -1,5 +1,4 @@
 import GUI from "lil-gui";
-import { scene } from "./core";
 import * as THREE from "three";
 import {
 	BACKGROUND_LIGHTS,
@@ -12,6 +11,7 @@ import {
 	VIGNETTE_PARAMS,
 	VOLUME_LIGHT_PARAMS,
 } from "./constants";
+import { scene } from "./core";
 import { updateGallerySideColor } from "./Gallery";
 
 // パラメータオブジェクトを constants.ts に貼り付けやすい TS 形式に整形
@@ -46,10 +46,7 @@ const formatValue = (key: string, v: unknown, indent: number): string => {
 	return String(v);
 };
 
-const formatObject = (
-	obj: Record<string, unknown>,
-	indent: number,
-): string => {
+const formatObject = (obj: Record<string, unknown>, indent: number): string => {
 	const pad = "\t".repeat(indent);
 	const closingPad = "\t".repeat(indent - 1);
 	const lines = Object.entries(obj).map(
@@ -61,7 +58,10 @@ const formatObject = (
 const formatArray = (arr: unknown[], indent: number): string => {
 	const pad = "\t".repeat(indent);
 	const closingPad = "\t".repeat(indent - 1);
-	const items = arr.map((item) => `${pad}${formatObject(item as Record<string, unknown>, indent + 1)},`);
+	const items = arr.map(
+		(item) =>
+			`${pad}${formatObject(item as Record<string, unknown>, indent + 1)},`,
+	);
 	return `[\n${items.join("\n")}\n${closingPad}]`;
 };
 
@@ -100,11 +100,14 @@ export const setupGUI = (): GUI => {
 		backgroundColor: SCENE.BACKGROUND_COLOR,
 	};
 
-	sceneFolder.addColor(sceneParams, "backgroundColor").name("Background").onChange((value: number) => {
-		if (scene.background instanceof THREE.Color) {
-			scene.background.set(value);
-		}
-	});
+	sceneFolder
+		.addColor(sceneParams, "backgroundColor")
+		.name("Background")
+		.onChange((value: number) => {
+			if (scene.background instanceof THREE.Color) {
+				scene.background.set(value);
+			}
+		});
 
 	sceneFolder.open();
 
@@ -144,18 +147,19 @@ export const setupGUI = (): GUI => {
 		frameColor: PLANE.SIDE_COLOR,
 	};
 
-	planeFolder.addColor(planeParams, "frameColor").name("Frame Color").onChange((value: number) => {
-		updateGallerySideColor(value);
-	});
+	planeFolder
+		.addColor(planeParams, "frameColor")
+		.name("Frame Color")
+		.onChange((value: number) => {
+			updateGallerySideColor(value);
+		});
 
 	// パララックスに応じて emissive を center → edge へ線形補間
 	// (毎フレーム updateParallax 側で反映されるので onChange は不要)
 	planeFolder
 		.add(EMISSIVE_PARAMS, "center", -1, 2, 0.01)
 		.name("Emissive Center");
-	planeFolder
-		.add(EMISSIVE_PARAMS, "edge", -1, 2, 0.01)
-		.name("Emissive Edge");
+	planeFolder.add(EMISSIVE_PARAMS, "edge", -1, 2, 0.01).name("Emissive Edge");
 
 	// Vignette (毎フレーム updateParallax 側で反映されるので onChange は不要)
 	const vignetteFolder = planeFolder.addFolder("Vignette");
@@ -197,7 +201,9 @@ export const setupGUI = (): GUI => {
 	floorFolder.add(FLOOR_PARAMS, "curveHeight", 0, 10, 0.1).name("Curve Height");
 	floorFolder.add(FLOOR_PARAMS, "noiseScale", 0, 10, 0.1).name("Noise Scale");
 	floorFolder.add(FLOOR_PARAMS, "noiseSpeed", 0, 2, 0.01).name("Noise Speed");
-	floorFolder.add(FLOOR_PARAMS, "noiseStrength", 0, 0.5, 0.005).name("Noise Strength");
+	floorFolder
+		.add(FLOOR_PARAMS, "noiseStrength", 0, 0.5, 0.005)
+		.name("Noise Strength");
 	floorFolder.addColor(FLOOR_PARAMS, "noiseColor").name("Noise Color");
 	floorFolder.add(FLOOR_PARAMS, "fogNear", 0, 30, 0.1).name("Fog Near");
 	floorFolder.add(FLOOR_PARAMS, "fogFar", 0, 60, 0.1).name("Fog Far");
@@ -208,9 +214,15 @@ export const setupGUI = (): GUI => {
 	const volumeFolder = gui.addFolder("Volume Light");
 	volumeFolder.add(VOLUME_LIGHT_PARAMS, "enabled").name("Enabled");
 	volumeFolder.add(VOLUME_LIGHT_PARAMS, "showHelper").name("Show Debug Helper");
-	volumeFolder.add(VOLUME_LIGHT_PARAMS, "distance", 1, 50, 0.5).name("Distance");
-	volumeFolder.add(VOLUME_LIGHT_PARAMS, "attenuation", 1, 50, 0.5).name("Attenuation");
-	volumeFolder.add(VOLUME_LIGHT_PARAMS, "anglePower", 0.5, 15, 0.1).name("Angle Power");
+	volumeFolder
+		.add(VOLUME_LIGHT_PARAMS, "distance", 1, 50, 0.5)
+		.name("Distance");
+	volumeFolder
+		.add(VOLUME_LIGHT_PARAMS, "attenuation", 1, 50, 0.5)
+		.name("Attenuation");
+	volumeFolder
+		.add(VOLUME_LIGHT_PARAMS, "anglePower", 0.5, 15, 0.1)
+		.name("Angle Power");
 	volumeFolder.add(VOLUME_LIGHT_PARAMS, "alpha", 0, 2, 0.01).name("Alpha");
 	volumeFolder.add(VOLUME_LIGHT_PARAMS, "wave", 0, 10, 0.1).name("Wave");
 	volumeFolder.add(VOLUME_LIGHT_PARAMS, "speed", 0, 1, 0.01).name("Speed");

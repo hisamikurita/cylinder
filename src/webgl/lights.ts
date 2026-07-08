@@ -166,8 +166,8 @@ export const updateBackgroundLightHelpers = (): void => {
 		const halfConeRad = THREE.MathUtils.degToRad(cfg.spotConeAngle * 0.5);
 		const currentRadiusBottom =
 			Math.tan(halfConeRad) * VOLUME_LIGHT_PARAMS.distance;
-		const originalHeight = (volume.geometry as THREE.CylinderGeometry).parameters
-			.height;
+		const originalHeight = (volume.geometry as THREE.CylinderGeometry)
+			.parameters.height;
 		const originalRadiusBottom = (volume.geometry as THREE.CylinderGeometry)
 			.parameters.radiusBottom;
 		volume.scale.set(
@@ -180,7 +180,8 @@ export const updateBackgroundLightHelpers = (): void => {
 
 		volumeMaterial.uniforms.uLightColor.value.setHex(cfg.colorL);
 		volumeMaterial.uniforms.uSpotPosition.value.copy(light.position);
-		volumeMaterial.uniforms.uAttenuation.value = VOLUME_LIGHT_PARAMS.attenuation;
+		volumeMaterial.uniforms.uAttenuation.value =
+			VOLUME_LIGHT_PARAMS.attenuation;
 		volumeMaterial.uniforms.uAnglePower.value = VOLUME_LIGHT_PARAMS.anglePower;
 		volumeMaterial.uniforms.uAlpha.value = VOLUME_LIGHT_PARAMS.alpha;
 		volumeMaterial.uniforms.uWave.value = VOLUME_LIGHT_PARAMS.wave;
