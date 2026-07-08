@@ -1,5 +1,11 @@
 import * as THREE from "three";
-import { BACKGROUND_LIGHTS, EMISSIVE_PARAMS, PARALLAX, PLANE } from "./constants";
+import {
+	BACKGROUND_LIGHTS,
+	EMISSIVE_PARAMS,
+	PARALLAX,
+	PLANE,
+	VIGNETTE_PARAMS,
+} from "./constants";
 import fragmentShader from "./shaders/plane.frag?raw";
 import vertexShader from "./shaders/plane.vert?raw";
 
@@ -23,7 +29,10 @@ export const createCoverMaterial = (
 			uWaveFrequency: { value: 0 },
 			uWaveSpeed: { value: 0 },
 			uWaveSeed: { value: 0 },
-			uEmissive: { value: EMISSIVE_PARAMS.intensity },
+			uEmissive: { value: EMISSIVE_PARAMS.center },
+			uVignetteStrength: { value: VIGNETTE_PARAMS.strength },
+			uVignettePower: { value: VIGNETTE_PARAMS.power },
+			uVignetteColor: { value: new THREE.Color(VIGNETTE_PARAMS.color) },
 			// Spotlight（最初のライトを使用）
 			uLightPos: { value: new THREE.Vector3(
 				BACKGROUND_LIGHTS[0].pos3D.x,

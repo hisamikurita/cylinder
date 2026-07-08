@@ -9,9 +9,10 @@ import {
 	PLANE,
 	REFLECTION_PARAMS,
 	SCENE,
+	VIGNETTE_PARAMS,
 	VOLUME_LIGHT_PARAMS,
 } from "./constants";
-import { updateGalleryEmissive, updateGallerySideColor } from "./Gallery";
+import { updateGallerySideColor } from "./Gallery";
 
 // パラメータオブジェクトを constants.ts に貼り付けやすい TS 形式に整形
 const COLOR_KEYS = new Set([
@@ -67,6 +68,7 @@ const formatArray = (arr: unknown[], indent: number): string => {
 const dumpParams = (): string => {
 	const blocks = [
 		`export const EMISSIVE_PARAMS = ${formatObject(EMISSIVE_PARAMS, 1)};`,
+		`export const VIGNETTE_PARAMS = ${formatObject(VIGNETTE_PARAMS, 1)};`,
 		`export const REFLECTION_PARAMS = ${formatObject(REFLECTION_PARAMS, 1)};`,
 		`export const FLOOR_PARAMS = ${formatObject(FLOOR_PARAMS, 1)};`,
 		`export const VOLUME_LIGHT_PARAMS = ${formatObject(VOLUME_LIGHT_PARAMS, 1)};`,
@@ -146,12 +148,21 @@ export const setupGUI = (): GUI => {
 		updateGallerySideColor(value);
 	});
 
+	// パララックスに応じて emissive を center → edge へ線形補間
+	// (毎フレーム updateParallax 側で反映されるので onChange は不要)
 	planeFolder
-		.add(EMISSIVE_PARAMS, "intensity", 0, 2, 0.01)
-		.name("Emissive")
-		.onChange((value: number) => {
-			updateGalleryEmissive(value);
-		});
+		.add(EMISSIVE_PARAMS, "center", -1, 2, 0.01)
+		.name("Emissive Center");
+	planeFolder
+		.add(EMISSIVE_PARAMS, "edge", -1, 2, 0.01)
+		.name("Emissive Edge");
+
+	// Vignette (毎フレーム updateParallax 側で反映されるので onChange は不要)
+	const vignetteFolder = planeFolder.addFolder("Vignette");
+	vignetteFolder.add(VIGNETTE_PARAMS, "strength", 0, 1, 0.01).name("Strength");
+	vignetteFolder.add(VIGNETTE_PARAMS, "power", 0.5, 6, 0.05).name("Power");
+	vignetteFolder.addColor(VIGNETTE_PARAMS, "color").name("Color");
+	vignetteFolder.close();
 
 	planeFolder.open();
 

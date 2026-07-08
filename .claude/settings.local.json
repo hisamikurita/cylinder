@@ -5,7 +5,8 @@
       "Bash(pnpm check:*)",
       "Bash(pnpm tsc *)",
       "Bash(npm run build:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(VITE_BASE=/cylinder/ pnpm build)"
     ]
   }
 }

@@ -13,6 +13,11 @@ uniform float uWaveSpeed;
 uniform float uWaveSeed;
 uniform float uEmissive;
 
+// Vignette
+uniform float uVignetteStrength;
+uniform float uVignettePower;
+uniform vec3 uVignetteColor;
+
 // Spotlight uniforms
 uniform vec3 uLightPos;
 uniform vec3 uLightDir;
@@ -146,6 +151,14 @@ void main() {
 
 			color = texture2D(uTexture, uv);
 			isImage = true;
+
+			// Vignette: UV 中心 (0.5, 0.5) からの距離で減衰。
+			// UV は 0..1 でプレーン全体に線形マップされるので、
+			// 補正なしのままで自然にプレーンのアスペクトに沿った楕円ケラレになる。
+			vec2 vigCentered = (vUv - 0.5) * 2.0; // -1..+1
+			float vigDist = clamp(length(vigCentered), 0.0, 1.0);
+			float vigFactor = pow(vigDist, uVignettePower) * uVignetteStrength;
+			color.rgb = mix(color.rgb, uVignetteColor, clamp(vigFactor, 0.0, 1.0));
 		}
 	}
 

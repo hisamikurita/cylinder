@@ -1,5 +1,11 @@
 import * as THREE from "three";
-import { BACKGROUND_LIGHTS, GALLERY, PLANE } from "./constants";
+import {
+	BACKGROUND_LIGHTS,
+	EMISSIVE_PARAMS,
+	GALLERY,
+	PLANE,
+	VIGNETTE_PARAMS,
+} from "./constants";
 import { createCurvedPlaneGeometry } from "./geometry";
 import { camera, scene } from "./core";
 import {
@@ -113,16 +119,6 @@ export const updateGallerySideColor = (color: number): void => {
 	}
 };
 
-export const updateGalleryEmissive = (intensity: number): void => {
-	for (const plane of galleryPlanes) {
-		const materials = plane.material as THREE.Material[];
-		const cover = materials[4] as THREE.ShaderMaterial;
-		if (cover.uniforms.uEmissive) {
-			cover.uniforms.uEmissive.value = intensity;
-		}
-	}
-};
-
 const worldPosition = new THREE.Vector3();
 
 export const updateParallax = (planes: THREE.Mesh[]): void => {
@@ -141,9 +137,25 @@ export const updateParallax = (planes: THREE.Mesh[]): void => {
 		// -1 ~ 1 にクランプ（角度を正規化）
 		const offset = Math.sin(angle);
 
+		// 手前中央 (worldX ≈ 0) を center、手前の左右 (|worldX| ≈ RADIUS) を edge
+		// で線形補間して emissive を決める
+		const normalizedX = THREE.MathUtils.clamp(
+			Math.abs(worldPosition.x) / GALLERY.RADIUS,
+			0,
+			1,
+		);
+		const t = 1 - normalizedX; // 1 = 真ん中, 0 = 左右端
+		const emissive =
+			EMISSIVE_PARAMS.edge +
+			(EMISSIVE_PARAMS.center - EMISSIVE_PARAMS.edge) * t;
+
 		const materials = plane.material as THREE.Material[];
 		const coverMaterial = materials[4] as THREE.ShaderMaterial;
 		coverMaterial.uniforms.uParallaxOffset.value = offset;
+		coverMaterial.uniforms.uEmissive.value = emissive;
+		coverMaterial.uniforms.uVignetteStrength.value = VIGNETTE_PARAMS.strength;
+		coverMaterial.uniforms.uVignettePower.value = VIGNETTE_PARAMS.power;
+		coverMaterial.uniforms.uVignetteColor.value.setHex(VIGNETTE_PARAMS.color);
 	}
 };
 

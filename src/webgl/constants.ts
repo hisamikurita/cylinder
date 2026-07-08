@@ -40,14 +40,23 @@ export const GALLERY = {
 export const PLANE = {
 	WIDTH: 3.8,
 	HEIGHT: 2.0,
-	DEPTH: 0.035,
+	DEPTH: 0.038,
 	SEGMENTS: 32,
 	SIDE_COLOR: 0x0d0d0d,
 } as const;
 
 // Emissive (画像の発光)
+// カメラに近い (真ん中) プレーンは center、後ろのプレーンは edge の emissive で線形補間
 export const EMISSIVE_PARAMS = {
-	intensity: -0.25,
+	center: 0.44, // カメラ側 (worldPos.z = +RADIUS)
+	edge: -0.6, // 反対側 (worldPos.z = -RADIUS)
+};
+
+// Plane vignette (画像四隅を暗く落とす)
+export const VIGNETTE_PARAMS = {
+	strength: 0.28, // 端で色をどれだけ暗くするか (0=なし, 1=真っ黒)
+	power: 1, // 減衰カーブの鋭さ (小さい=なめらか, 大きい=中心が広く端で急落)
+	color: 0x000000,
 };
 
 // Scene
@@ -68,7 +77,7 @@ export const REFLECTION_PARAMS = {
 	blurRadius: 2,
 	waveStrength: 0.07,
 	waveFrequency: 4,
-	waveSpeed: 0.6,
+	waveSpeed: 0.8,
 };
 
 // Floor surface (curve deformation + noise + fog)
