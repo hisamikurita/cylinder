@@ -29,6 +29,9 @@ const FLOOR_DEPTH = 20; // 前後方向 (world Z)
 // zoomIn/zoomOut で鏡面の明度をフェードするための係数 (1 = 通常, 0 = 完全に消える)
 export const reflectionBrightnessFade = { value: 1 };
 
+// ロード完了時のフェードイン用: 床の最終 alpha に掛かる係数 (0 = 完全に透明)
+export const floorAlphaFade = { value: 1 };
+
 let reflectionRT: THREE.WebGLRenderTarget;
 let blurRTA: THREE.WebGLRenderTarget;
 let blurRTB: THREE.WebGLRenderTarget;
@@ -125,6 +128,8 @@ export const setupReflection = (): void => {
 			uFogNear: { value: FLOOR_PARAMS.fogNear },
 			uFogFar: { value: FLOOR_PARAMS.fogFar },
 			uFogStrength: { value: FLOOR_PARAMS.fogStrength },
+			// 全体の alpha 係数 (floorAlphaFade でロード時にフェードイン)
+			uFloorAlpha: { value: 1 },
 		},
 		vertexShader: floorVertexShader,
 		fragmentShader: floorFragmentShader,
@@ -177,6 +182,7 @@ export const updateFloorLightUniforms = (): void => {
 	floorMaterial.uniforms.uFogNear.value = FLOOR_PARAMS.fogNear;
 	floorMaterial.uniforms.uFogFar.value = FLOOR_PARAMS.fogFar;
 	floorMaterial.uniforms.uFogStrength.value = FLOOR_PARAMS.fogStrength;
+	floorMaterial.uniforms.uFloorAlpha.value = floorAlphaFade.value;
 };
 
 // 円筒の tilt に合わせて床も同方向に傾ける。
@@ -278,8 +284,10 @@ export const renderWithReflection = (
 			REFLECTION_PARAMS.brightnessEdge +
 			(REFLECTION_PARAMS.brightnessCenter - REFLECTION_PARAMS.brightnessEdge) *
 				centerness;
+		// uReflectionBoost はホバー中の per-plane 加算 (gsap でトゥイーン)
+		const boost = cover.uniforms.uReflectionBoost.value as number;
 		cover.uniforms.uBrightness.value =
-			brightness * reflectionBrightnessFade.value;
+			(brightness + boost) * reflectionBrightnessFade.value;
 		cover.uniforms.uTime.value = t;
 		cover.uniforms.uWaveStrength.value = REFLECTION_PARAMS.waveStrength;
 		cover.uniforms.uWaveFrequency.value = REFLECTION_PARAMS.waveFrequency;

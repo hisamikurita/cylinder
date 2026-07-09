@@ -15,8 +15,9 @@ uniform float uWaveSpeed;
 uniform float uWaveSeed;
 uniform float uEmissive;
 
-// Hover: 中央に留まる薄い黒リングのフェード係数 (0 = 非表示, 1 = 表示)
+// Hover 黒円: サイズ制御 (uHoverCircle) と不透明度制御 (uHoverAlpha) を分離
 uniform float uHoverCircle;
+uniform float uHoverAlpha;
 
 // Vignette
 uniform float uVignetteStrength;
@@ -169,15 +170,28 @@ void main() {
 			float vigFactor = pow(vigDist, uVignettePower) * uVignetteStrength;
 			color.rgb = mix(color.rgb, uVignetteColor, clamp(vigFactor, 0.0, 1.0));
 
-			// Hover: 中央に留まる薄い黒リング (アスペクト補正で真円になる)
-			if (uHoverCircle > 0.0) {
+			// Hover: 中央からふわっと広がる黒塗り (境界を作らない連続グラデーション)
+			// 波紋の立体感は plane.vert 側で頂点シェーダーが実際に凹凸を作り、
+			// 既存のスポットライト計算がそのまま highlight/shadow を生む
+			// uHoverCircle は円のサイズ、uHoverAlpha は不透明度。
+			// gsap 側で 2 本を別タイミングで動かせば「拡大途中で見え始め、
+			// 縮小途中で消える」演出が作れる (フェードカーブは JS 側で自由)
+			if (uHoverAlpha > 0.0 && uHoverCircle > 0.0) {
 				float aspect = uPlaneSize.x / uPlaneSize.y;
 				vec2 circleCentered = (vUv - 0.5) * vec2(aspect, 1.0);
 				float circleDist = length(circleCentered);
-				float circleRadius = 0.35;
-				float circleWidth = 0.008; // リング線の太さ (UV 相当)
-				float ring = smoothstep(circleWidth, 0.0, abs(circleDist - circleRadius));
-				color.rgb = mix(color.rgb, vec3(0.0), ring * uHoverCircle * 0.5);
+				float discMax = 1.4 * uHoverCircle;
+				// pow の指数 < 1 で中央付近の "濃い" 帯を広げつつ、
+				// smoothstep 端はゼロに向かうので縁は依然として溶ける
+				float disc = pow(1.0 - smoothstep(0.0, discMax, circleDist), 0.7);
+				color.rgb = mix(color.rgb, vec3(0.0), disc * uHoverAlpha * 0.7);
+
+				// 波紋の谷 (sin の山側) をわずかに濃くして立体感を補強
+				// (freq / speed は plane.vert の波と一致させる)
+				float phase = circleDist * 8.0 - uTime * 2.3;
+				float trough = pow(max(sin(phase), 0.0), 3.0);
+				float rippleMask = 1.0 - smoothstep(0.4, 1.05, circleDist);
+				color.rgb = mix(color.rgb, vec3(0.0), trough * rippleMask * uHoverAlpha * 0.10);
 			}
 		}
 	}

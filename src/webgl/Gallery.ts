@@ -74,6 +74,7 @@ const createVideoTexture = (
 export const createGallery = (
 	items: MediaItem[],
 	options: Partial<GalleryOptions> = {},
+	onEachLoaded?: () => void,
 ): THREE.Mesh[] => {
 	const opts = { ...defaultOptions, ...options };
 	const textureLoader = new THREE.TextureLoader();
@@ -100,15 +101,17 @@ export const createGallery = (
 		const item = items[i];
 		const texture =
 			item.type === "video"
-				? createVideoTexture(item.url, (w, h) =>
-						updateCoverMaterialImageSize(coverMaterial, w, h),
-					)
+				? createVideoTexture(item.url, (w, h) => {
+						updateCoverMaterialImageSize(coverMaterial, w, h);
+						onEachLoaded?.();
+					})
 				: textureLoader.load(item.url, (loadedTexture) => {
 						updateCoverMaterialImageSize(
 							coverMaterial,
 							loadedTexture.image.width,
 							loadedTexture.image.height,
 						);
+						onEachLoaded?.();
 					});
 
 		const coverMaterial = createCoverMaterial(
@@ -200,7 +203,9 @@ export const updateParallax = (planes: THREE.Mesh[]): void => {
 		const materials = plane.material as THREE.Material[];
 		const coverMaterial = materials[4] as THREE.ShaderMaterial;
 		coverMaterial.uniforms.uParallaxOffset.value = offset;
-		coverMaterial.uniforms.uEmissive.value = emissive;
+		// ホバー加算 (uEmissiveBoost) を上乗せ (gsap でトゥイーンされる)
+		const emissiveBoost = coverMaterial.uniforms.uEmissiveBoost.value as number;
+		coverMaterial.uniforms.uEmissive.value = emissive + emissiveBoost;
 		coverMaterial.uniforms.uVignetteStrength.value = VIGNETTE_PARAMS.strength;
 		coverMaterial.uniforms.uVignettePower.value = VIGNETTE_PARAMS.power;
 		coverMaterial.uniforms.uVignetteColor.value.setHex(VIGNETTE_PARAMS.color);

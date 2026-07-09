@@ -1,13 +1,26 @@
+import gsap from "gsap";
+import * as THREE from "three";
 import "./style.css";
 import { hideZoomUI, setupZoomUI, showZoomUI } from "./ui";
 import type { MediaItem } from "./webgl";
 import {
+	CAMERA,
+	camera,
 	closeZoom,
 	createGallery,
+	DURATION,
+	EASING,
+	floorAlphaFade,
+	FOG,
+	galleryPlanes,
+	gallerySideMaterial,
 	handleResize,
 	initRenderer,
+	PLANE,
+	reflectionBrightnessFade,
 	renderWithReflection,
 	resizeReflection,
+	scene,
 	setOnZoomChange,
 	setupBackgroundLightHelpers,
 	setupGalleryRotation,
@@ -19,16 +32,36 @@ import {
 	updateFloorLightUniforms,
 	updateGalleryLightUniforms,
 	updateGalleryRotation,
+	updateGallerySideColor,
 	updateParallax,
+	volumeLightAlphaFade,
 	zoomToAdjacent,
 } from "./webgl";
 
 // レンダラーを初期化
 initRenderer();
 
-// ライトとヘルパーをセットアップ
-// setupLights();
-// setupHelpers();
+// === LOADING 初期状態 ===
+// 真上から円筒を見下ろすアングルにして、フレーム色を白、ライト・反射を off にする。
+// FOV も一時的に狭く (望遠寄り) して、より平面的なトップダウンビューに。
+// テクスチャ/動画が全てロードされたら finishLoading() で通常状態へトランジション
+const LOADING_CAMERA_Y = 36;
+const LOADING_FOV = 40;
+// fog.far がデフォルト値 (11.5) だと真上ビューではカメラから遠すぎて白フレームまで
+// フォグに沈む。ロード中は far を大きく取って fog をほぼ効かないようにする
+// (カメラ Y=36 から見た距離 ≈35 に対して factor が 0.15 以下に収まる値)
+const LOADING_FOG_FAR = 200;
+camera.position.set(0, LOADING_CAMERA_Y, 0);
+camera.rotation.set(-Math.PI / 2, 0, 0);
+camera.fov = LOADING_FOV;
+camera.updateProjectionMatrix();
+if (scene.fog instanceof THREE.Fog) {
+	scene.fog.far = LOADING_FOG_FAR;
+}
+volumeLightAlphaFade.value = 0;
+reflectionBrightnessFade.value = 0;
+// 床全体の alpha も 0 (完全に見えない) から reveal で 1 へフェード
+floorAlphaFade.value = 0;
 
 // ギャラリーを作成 (V-I-V-I-V-I の交互配置)
 const UNSPLASH_PARAMS = "w=2000&h=800&fit=crop&crop=entropy&q=80&auto=format";
@@ -88,12 +121,21 @@ const mediaItems: MediaItem[] = [
 		},
 	},
 ];
-const planes = createGallery(mediaItems);
+// メディア load 完了カウント。全部揃ったら finishLoading を発火
+let loadedMediaCount = 0;
+const planes = createGallery(mediaItems, {}, () => {
+	loadedMediaCount++;
+	if (loadedMediaCount >= mediaItems.length) {
+		finishLoading();
+	}
+});
 
-// インタラクションをセットアップ
-setupInteractions(planes);
+// フレーム (プレーン側面 + ボーダー) を白でスタート
+updateGallerySideColor(0xffffff);
 
-// zoom UI (タイトル/出典/前後スライド/戻る) をセットアップして zoom 状態と連動させる
+// zoom UI (タイトル/出典/前後スライド/戻る) をセットアップして zoom 状態と連動させる。
+// setupInteractions / setupGalleryRotation はマウス系のイベントリスナーを張るので、
+// ロード完了 (= reveal 完了) を待って finishLoading の末尾で呼び出す
 setupZoomUI({
 	onPrev: () => zoomToAdjacent(-1),
 	onNext: () => zoomToAdjacent(1),
@@ -106,9 +148,6 @@ setOnZoomChange(({ active, index }) => {
 		hideZoomUI();
 	}
 });
-
-// ギャラリー回転をセットアップ
-setupGalleryRotation();
 
 // 鏡面反射をセットアップ
 setupReflection();
@@ -135,3 +174,98 @@ startAnimationLoop(
 	},
 	() => renderWithReflection(),
 );
+
+// === LOADING 完了時のトランジション ===
+// 全メディアがロード完了した時に発火して、カメラ・フレーム色・ライトを通常状態へ
+function finishLoading(): void {
+	const REVEAL_DURATION = 2.5;
+
+	// カメラ Y (降下) はすぐ開始
+	gsap.to(camera.position, {
+		y: CAMERA.INITIAL_Y,
+		duration: REVEAL_DURATION,
+		ease: EASING.TRANSFORM,
+	});
+	// 「正面を向く」アニメ (Z 前進 + rotation.x 起こし) は少し遅らせる。
+	// 先に降下してから立ち上がる流れになる
+	const FACE_FORWARD_DELAY = 0.40;
+	gsap.to(camera.position, {
+		z: CAMERA.INITIAL_Z,
+		delay: FACE_FORWARD_DELAY,
+		duration: REVEAL_DURATION,
+		ease: EASING.TRANSFORM,
+	});
+	gsap.to(camera.rotation, {
+		x: 0,
+		delay: FACE_FORWARD_DELAY,
+		duration: REVEAL_DURATION,
+		ease: EASING.TRANSFORM,
+	});
+	// FOV を望遠寄り (LOADING_FOV) → 通常の CAMERA.FOV に戻す。
+	// PerspectiveCamera は fov を書き換えても updateProjectionMatrix()
+	// を呼ぶまで反映されないので onUpdate で毎フレーム更新する
+	gsap.to(camera, {
+		fov: CAMERA.FOV,
+		duration: REVEAL_DURATION,
+		ease: EASING.TRANSFORM,
+		onUpdate: () => camera.updateProjectionMatrix(),
+	});
+
+	// フォグの far を通常値へ戻す (ロード中は白フレームまで見せるために遠ざけていた)
+	// 正面を向くアニメと同時にしたいので同じ delay を掛ける
+	if (scene.fog instanceof THREE.Fog) {
+		gsap.to(scene.fog, {
+			far: FOG.FAR,
+			delay: FACE_FORWARD_DELAY,
+			duration: REVEAL_DURATION,
+			ease: EASING.TRANSFORM,
+		});
+	}
+
+	// フレーム色を白 → 030303 (RGB proxy を tween して onUpdate で反映)
+	const colorProxy = new THREE.Color(0xffffff);
+	const targetColor = new THREE.Color(PLANE.SIDE_COLOR);
+	gsap.to(colorProxy, {
+		r: targetColor.r,
+		g: targetColor.g,
+		b: targetColor.b,
+		duration: REVEAL_DURATION,
+		ease: EASING.TRANSFORM,
+		onUpdate: () => {
+			gallerySideMaterial.color.copy(colorProxy);
+			for (const plane of galleryPlanes) {
+				const cover = (plane.material as THREE.Material[])[4] as THREE.ShaderMaterial;
+				cover.uniforms.uBorderColor.value.copy(colorProxy);
+			}
+		},
+	});
+
+	// ライトを点灯 (volume light の柱と反射のブライトネスを 0 → 1)
+	// 「正面を向く」アニメと同時に始めたいので同じ delay を掛ける
+	gsap.to(volumeLightAlphaFade, {
+		value: 1,
+		delay: FACE_FORWARD_DELAY + 1.2,
+		duration: DURATION.LONG,
+		ease: EASING.TRANSFORM,
+	});
+	gsap.to(reflectionBrightnessFade, {
+		value: 1,
+		delay: FACE_FORWARD_DELAY + 1.2,
+		duration: DURATION.LONG,
+		ease: EASING.TRANSFORM,
+	});
+	// 床全体の alpha を 0 → 1 へ (reflection と同じタイミング)
+	gsap.to(floorAlphaFade, {
+		value: 1,
+		delay: FACE_FORWARD_DELAY,
+		duration: DURATION.EXTRA_LONG,
+		ease: EASING.TRANSFORM,
+	});
+
+	// 「正面を向く」アニメが始まるタイミングでマウス系インタラクションを解禁
+	// (mouse tilt / sway, ドラッグ回転, クリックでズーム, ホバー円/リップル)
+	gsap.delayedCall(FACE_FORWARD_DELAY, () => {
+		setupInteractions(planes);
+		setupGalleryRotation();
+	});
+}

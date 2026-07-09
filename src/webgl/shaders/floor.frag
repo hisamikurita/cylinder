@@ -13,6 +13,9 @@ uniform float uFogNear;
 uniform float uFogFar;
 uniform float uFogStrength;
 
+// 床全体の alpha 係数 (ロードフェード用)
+uniform float uFloorAlpha;
+
 uniform float uTime;
 uniform float uNoiseScale;
 uniform float uNoiseStrength;
@@ -123,7 +126,7 @@ void main() {
 
 	// alpha は fog だけで駆動 (奥ほど不透明) 。
 	// ノイズを alpha に効かせるとピクセル単位のちらつき (エイリアス) が出るので RGB 側だけに載せる。
-	float alpha = clamp(fogFactor, 0.0, 1.0);
+	float alpha = clamp(fogFactor, 0.0, 1.0) * uFloorAlpha;
 
 	gl_FragColor = vec4(color, alpha);
 }

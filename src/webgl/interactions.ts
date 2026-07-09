@@ -37,8 +37,6 @@ let originalGalleryPositionZ = 0;
 // 波紋を再発火させないため、変わり目でのみトリガーする)
 let lastHoveredPlane: THREE.Mesh | null = null;
 
-const HOVER_CIRCLE_FADE_DURATION = 0.3;
-
 // 隣スライド遷移で zoomOut → zoomIn を繋ぐ待ち時間 (zoomOut の主要 tween 完了後に発火)
 const ADJACENT_TRANSITION_DELAY = DURATION.BASE + 0.1;
 
@@ -109,13 +107,47 @@ export const zoomToAdjacent = (direction: 1 | -1): void => {
 	);
 };
 
+// ホバー円のフェード設定
+// - uHoverCircle (サイズ): 全期間をゆっくり 0↔1 で動く
+// - uHoverAlpha (不透明度): 短めに動く。入りは delay を挟んでサイズが少し
+//   育ってから見え始め、抜けは即発火でサイズが縮小しきる前に消える
+const HOVER_ALPHA_DURATION = 1.0;
+const HOVER_ALPHA_IN_DELAY = 0;
+
+// ホバー中に反射のブライトネスへ加算する値 (per-plane) と、そのフェード秒数
+const HOVER_REFLECTION_BOOST = 2.4;
+
+// ホバー中に emissive へ加算する値
+const HOVER_EMISSIVE_BOOST = 1.5;
+
 const fadeHoverCircle = (plane: THREE.Mesh, target: number): void => {
 	const materials = plane.material as THREE.Material[];
 	const cover = materials[4] as THREE.ShaderMaterial;
 	gsap.to(cover.uniforms.uHoverCircle, {
 		value: target,
-		duration: HOVER_CIRCLE_FADE_DURATION,
-		ease: "power2.out",
+		duration: DURATION.EXTRA_LONG,
+		ease: EASING.TRANSFORM,
+		overwrite: true,
+	});
+	gsap.to(cover.uniforms.uHoverAlpha, {
+		value: target,
+		duration: HOVER_ALPHA_DURATION,
+		delay: target === 1 ? HOVER_ALPHA_IN_DELAY : 0,
+		ease: EASING.MATERIAL,
+		overwrite: true,
+	});
+	// 反射のブライトネスを +HOVER_REFLECTION_BOOST 加算 (ホバー中のみ)
+	gsap.to(cover.uniforms.uReflectionBoost, {
+		value: target * HOVER_REFLECTION_BOOST,
+		duration: DURATION.BASE,
+		ease: EASING.TRANSFORM,
+		overwrite: true,
+	});
+	// emissive を +HOVER_EMISSIVE_BOOST 加算 (ホバー中のみ)
+	gsap.to(cover.uniforms.uEmissiveBoost, {
+		value: target * HOVER_EMISSIVE_BOOST,
+		duration: DURATION.LONG,
+		ease: EASING.TRANSFORM,
 		overwrite: true,
 	});
 };

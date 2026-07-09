@@ -31,8 +31,15 @@ export const createCoverMaterial = (
 			uWaveFrequency: { value: 0 },
 			uWaveSpeed: { value: 0 },
 			uWaveSeed: { value: 0 },
-			// ホバー時に中央に留まる薄い黒円のフェード係数 (0 = 非表示, 1 = 表示)
+			// ホバー黒円: uHoverCircle = 円のサイズ (0=点, 1=最大)、
+			// uHoverAlpha = 円の不透明度 & 頂点変位量 (0=非表示, 1=全表示)。
+			// gsap で別々にトゥイーンして "サイズは残しつつ先にフェードアウト" などを作る
 			uHoverCircle: { value: 0 },
+			uHoverAlpha: { value: 0 },
+			// ホバー中に反射描画の brightness に足し込む加算値 (renderWithReflection 側で使用)
+			uReflectionBoost: { value: 0 },
+			// ホバー中に emissive に足し込む加算値 (updateParallax 側で加算)
+			uEmissiveBoost: { value: 0 },
 			uEmissive: { value: EMISSIVE_PARAMS.center },
 			uVignetteStrength: { value: VIGNETTE_PARAMS.strength },
 			uVignettePower: { value: VIGNETTE_PARAMS.power },
