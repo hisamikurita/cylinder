@@ -264,5 +264,7 @@ export const setupGUI = (): GUI => {
 	const light2Folder = createLightFolder(1, "Light 2 (Right → Left)");
 	light2Folder.close();
 
+	gui.close();
+
 	return gui;
 };

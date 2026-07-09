@@ -15,6 +15,9 @@ uniform float uWaveSpeed;
 uniform float uWaveSeed;
 uniform float uEmissive;
 
+// Hover: 中央に留まる薄い黒リングのフェード係数 (0 = 非表示, 1 = 表示)
+uniform float uHoverCircle;
+
 // Vignette
 uniform float uVignetteStrength;
 uniform float uVignettePower;
@@ -165,6 +168,17 @@ void main() {
 			float vigDist = clamp(length(vigCentered), 0.0, 1.0);
 			float vigFactor = pow(vigDist, uVignettePower) * uVignetteStrength;
 			color.rgb = mix(color.rgb, uVignetteColor, clamp(vigFactor, 0.0, 1.0));
+
+			// Hover: 中央に留まる薄い黒リング (アスペクト補正で真円になる)
+			if (uHoverCircle > 0.0) {
+				float aspect = uPlaneSize.x / uPlaneSize.y;
+				vec2 circleCentered = (vUv - 0.5) * vec2(aspect, 1.0);
+				float circleDist = length(circleCentered);
+				float circleRadius = 0.35;
+				float circleWidth = 0.008; // リング線の太さ (UV 相当)
+				float ring = smoothstep(circleWidth, 0.0, abs(circleDist - circleRadius));
+				color.rgb = mix(color.rgb, vec3(0.0), ring * uHoverCircle * 0.5);
+			}
 		}
 	}
 

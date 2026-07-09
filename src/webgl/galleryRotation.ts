@@ -184,11 +184,13 @@ export const setTargetRotation = (value: number): void => {
 export const resetTiltAndSway = (): void => {
 	if (!galleryGroup) return;
 
+	// rotation は "auto" にして rotation.x だけを潰す
+	// (zoomToAdjacent が先行で仕込む rotation.y tween を残すため)
 	gsap.to(galleryGroup.rotation, {
 		x: 0,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
-		overwrite: true,
+		overwrite: "auto",
 	});
 
 	gsap.to(galleryGroup.position, {

@@ -16,6 +16,12 @@ import {
 } from "./galleryRotation";
 import type { CurvedPlaneData } from "./geometry";
 import { volumeLightAlphaFade } from "./lights";
+import {
+	FLOOR_Y,
+	FLOOR_Y_ZOOMED,
+	floorMesh,
+	reflectionBrightnessFade,
+} from "./reflection";
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -26,6 +32,93 @@ let activePlane: THREE.Mesh | null = null;
 // zoomOut で position.z を戻すために保存する元の値
 // (rotation.y は zoomOut で戻さず、current の位置を保持する)
 let originalGalleryPositionZ = 0;
+
+// ホバー波紋: 直前にホバーしていたプレーン (同じプレーン上での連続 mousemove では
+// 波紋を再発火させないため、変わり目でのみトリガーする)
+let lastHoveredPlane: THREE.Mesh | null = null;
+
+const HOVER_CIRCLE_FADE_DURATION = 0.3;
+
+// 隣スライド遷移で zoomOut → zoomIn を繋ぐ待ち時間 (zoomOut の主要 tween 完了後に発火)
+const ADJACENT_TRANSITION_DELAY = DURATION.BASE + 0.1;
+
+// zoomOut 後にドラッグを解禁するまでの待ち時間 (0 = 即座, DURATION.BASE = 従来通り)
+const DRAG_UNLOCK_DELAY = 0.4;
+
+// zoomIn 後に UI (title/credit/nav) を出すまでの待ち時間
+// (プレーンの拡大が進んでから UI を見せることでリズムを整える)
+const UI_SHOW_DELAY = 0.80;
+
+export type ZoomState = { active: boolean; index: number | null };
+let onZoomChangeCallback: ((state: ZoomState) => void) | null = null;
+
+export const setOnZoomChange = (
+	cb: (state: ZoomState) => void,
+): void => {
+	onZoomChangeCallback = cb;
+};
+
+const notifyZoomChange = (): void => {
+	if (!onZoomChangeCallback) return;
+	const index = activePlane ? targetPlanes.indexOf(activePlane) : null;
+	onZoomChangeCallback({ active: isZoomed, index });
+};
+
+export const closeZoom = (): void => {
+	if (!isZoomed) return;
+	zoomOut();
+};
+
+// zoomIn の rotation を通常より何秒早めるか (0 で従来通り = zoomIn 開始と同時)
+const ROTATION_LEAD_TIME = 0.5;
+
+export const zoomToAdjacent = (direction: 1 | -1): void => {
+	if (!isZoomed || !activePlane) return;
+	const currentIndex = targetPlanes.indexOf(activePlane);
+	if (currentIndex === -1) return;
+	const nextIndex =
+		(currentIndex + direction + targetPlanes.length) % targetPlanes.length;
+	const nextPlane = targetPlanes[nextIndex];
+
+	// 次プレーンへの回転先を先に算出 (最短角度差で回す)
+	const planeAngle = Math.atan2(nextPlane.position.z, nextPlane.position.x);
+	const rawTargetY = planeAngle - Math.PI / 2;
+	const currentY = galleryGroup.rotation.y;
+	const twoPi = Math.PI * 2;
+	let diff = (((rawTargetY - currentY) % twoPi) + twoPi) % twoPi;
+	if (diff > Math.PI) diff -= twoPi;
+	const targetRotationY = currentY + diff;
+
+	// マスタータイムラインで zoomOut → 早めの rotation → zoomIn を順に発火
+	const tl = gsap.timeline();
+	tl.call(() => zoomOut(), undefined, 0);
+	tl.to(
+		galleryGroup.rotation,
+		{
+			y: targetRotationY,
+			duration: DURATION.BASE,
+			ease: EASING.TRANSFORM,
+			overwrite: "auto",
+		},
+		ADJACENT_TRANSITION_DELAY - ROTATION_LEAD_TIME,
+	);
+	tl.call(
+		() => zoomIn(nextPlane, { skipRotation: true }),
+		undefined,
+		ADJACENT_TRANSITION_DELAY,
+	);
+};
+
+const fadeHoverCircle = (plane: THREE.Mesh, target: number): void => {
+	const materials = plane.material as THREE.Material[];
+	const cover = materials[4] as THREE.ShaderMaterial;
+	gsap.to(cover.uniforms.uHoverCircle, {
+		value: target,
+		duration: HOVER_CIRCLE_FADE_DURATION,
+		ease: "power2.out",
+		overwrite: true,
+	});
+};
 
 export const setupInteractions = (planes: THREE.Mesh[]): void => {
 	targetPlanes = planes;
@@ -53,7 +146,16 @@ const onHoverMove = (event: MouseEvent): void => {
 	raycaster.setFromCamera(mouse, camera);
 	const intersects = raycaster.intersectObjects(targetPlanes);
 	const front = intersects.find((i) => isFrontHalfPlane(i.object));
-	renderer.domElement.style.cursor = front ? "pointer" : "";
+	renderer.domElement.style.cursor = front && !isZoomed ? "pointer" : "";
+
+	// プレーンの変わり目でのみ処理: 新しく乗ったプレーンは 1 へフェードイン、
+	// 抜けた/切り替わった前のプレーンは 0 へフェードアウト
+	const hoveredPlane = (front?.object as THREE.Mesh | undefined) ?? null;
+	if (hoveredPlane !== lastHoveredPlane) {
+		if (lastHoveredPlane) fadeHoverCircle(lastHoveredPlane, 0);
+		if (hoveredPlane && !isZoomed) fadeHoverCircle(hoveredPlane, 1);
+		lastHoveredPlane = hoveredPlane;
+	}
 };
 
 const onResize = (): void => {
@@ -113,7 +215,10 @@ const calculateCameraDistance = (
 	return distance;
 };
 
-const zoomIn = (plane: THREE.Mesh): void => {
+const zoomIn = (
+	plane: THREE.Mesh,
+	options?: { skipRotation?: boolean },
+): void => {
 	activePlane = plane;
 	// zoomOut で復元するために position.z を保存
 	originalGalleryPositionZ = galleryGroup.position.z;
@@ -155,10 +260,22 @@ const zoomIn = (plane: THREE.Mesh): void => {
 		0,
 	);
 	tl.to(
-		galleryGroup.rotation,
-		{ y: targetRotationY, duration: DURATION.BASE, ease: EASING.TRANSFORM },
+		reflectionBrightnessFade,
+		{ value: 0, duration: DURATION.LONG, ease: EASING.TRANSFORM },
 		0,
 	);
+	tl.to(
+		floorMesh.position,
+		{ y: FLOOR_Y_ZOOMED, duration: DURATION.LONG, ease: EASING.TRANSFORM },
+		0,
+	);
+	if (!options?.skipRotation) {
+		tl.to(
+			galleryGroup.rotation,
+			{ y: targetRotationY, duration: DURATION.BASE, ease: EASING.TRANSFORM },
+			0,
+		);
+	}
 	tl.to(
 		galleryGroup.position,
 		{ z: targetPositionZ, duration: DURATION.BASE, ease: EASING.TRANSFORM },
@@ -180,6 +297,8 @@ const zoomIn = (plane: THREE.Mesh): void => {
 	setDragEnabled(false);
 	setRotationPaused(true);
 	isZoomed = true;
+	// UI 表示は少し遅らせる (拡大アニメが進んでから content を出す)
+	gsap.delayedCall(UI_SHOW_DELAY, notifyZoomChange);
 };
 
 const zoomOut = (): void => {
@@ -203,6 +322,16 @@ const zoomOut = (): void => {
 			duration: DURATION.EXTRA_LONG,
 			ease: EASING.TRANSFORM,
 		});
+		gsap.to(reflectionBrightnessFade, {
+			value: 1,
+			duration: DURATION.EXTRA_LONG,
+			ease: EASING.TRANSFORM,
+		});
+		gsap.to(floorMesh.position, {
+			y: FLOOR_Y,
+			duration: DURATION.LONG,
+			ease: EASING.TRANSFORM,
+		});
 
 		morphToCurved(activePlane);
 		activePlane = null;
@@ -218,17 +347,22 @@ const zoomOut = (): void => {
 		ease: EASING.TRANSFORM,
 	});
 
-	// 他の tween 完了後にオート回転を再開する。この時点で targetRotation を現在の
-	// rotation.y に合わせておかないと、内挿が過去の targetRotation に向かって
-	// 引っ張り、せっかく中央に持ってきたプレーンがズレてしまう
-	gsap.delayedCall(DURATION.BASE, () => {
+	// ドラッグは早めに解禁する。targetRotation を先に現在の rotation.y に同期しないと
+	// unpause した瞬間、内挿が過去の targetRotation に向かって引っ張ってしまう
+	gsap.delayedCall(DRAG_UNLOCK_DELAY, () => {
 		setTargetRotation(galleryGroup.rotation.y);
-		setAutoRotating(true);
 		setDragEnabled(true);
 		setRotationPaused(false);
 	});
 
+	// オート回転再開は主要 tween が完了してから (途中で回転が始まると z tween 中に
+	// 動きが加算されて挙動が読みにくくなる)
+	gsap.delayedCall(DURATION.BASE, () => {
+		setAutoRotating(true);
+	});
+
 	isZoomed = false;
+	notifyZoomChange();
 };
 
 const morphToFlat = (plane: THREE.Mesh, delay = 0): void => {

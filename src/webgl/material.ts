@@ -31,6 +31,8 @@ export const createCoverMaterial = (
 			uWaveFrequency: { value: 0 },
 			uWaveSpeed: { value: 0 },
 			uWaveSeed: { value: 0 },
+			// ホバー時に中央に留まる薄い黒円のフェード係数 (0 = 非表示, 1 = 表示)
+			uHoverCircle: { value: 0 },
 			uEmissive: { value: EMISSIVE_PARAMS.center },
 			uVignetteStrength: { value: VIGNETTE_PARAMS.strength },
 			uVignettePower: { value: VIGNETTE_PARAMS.power },

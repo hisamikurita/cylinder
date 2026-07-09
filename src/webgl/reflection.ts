@@ -18,11 +18,16 @@ import floorVertexShader from "./shaders/floor.vert?raw";
 import fullscreenVertexShader from "./shaders/fullscreen.vert?raw";
 
 // 床面（ミラー）
-let floorMesh: THREE.Mesh;
+export let floorMesh: THREE.Mesh;
 let floorMaterial: THREE.ShaderMaterial;
-const FLOOR_Y = -0.7; // 床のY座標
+export const FLOOR_Y = -0.7; // 床のY座標 (rest state)
+// zoomIn 時に床を落とす先の Y (プレーン下端 y=-1 より下に来るよう余裕を持たせる)
+export const FLOOR_Y_ZOOMED = -1.2;
 const FLOOR_WIDTH = 40; // 左右方向 (world X)
 const FLOOR_DEPTH = 20; // 前後方向 (world Z)
+
+// zoomIn/zoomOut で鏡面の明度をフェードするための係数 (1 = 通常, 0 = 完全に消える)
+export const reflectionBrightnessFade = { value: 1 };
 
 let reflectionRT: THREE.WebGLRenderTarget;
 let blurRTA: THREE.WebGLRenderTarget;
@@ -245,7 +250,7 @@ export const renderWithReflection = (
 	gl.depthMask(true);
 	gl.disable(gl.STENCIL_TEST);
 
-	galleryGroup.position.y = FLOOR_Y * 2 - originalY;
+	galleryGroup.position.y = floorMesh.position.y * 2 - originalY;
 	galleryGroup.scale.y = -1;
 	floorMesh.visible = false;
 	galleryGroup.visible = true;
@@ -253,7 +258,9 @@ export const renderWithReflection = (
 
 	const originalSideColor = gallerySideMaterial.color.clone();
 	// side material は共有なので、edge の値で一律 darken (subtle効果なのでこれで十分)
-	gallerySideMaterial.color.multiplyScalar(REFLECTION_PARAMS.brightnessEdge);
+	gallerySideMaterial.color.multiplyScalar(
+		REFLECTION_PARAMS.brightnessEdge * reflectionBrightnessFade.value,
+	);
 	const t = performance.now() / 1000;
 	const reflectionWorldPos = new THREE.Vector3();
 	for (const plane of galleryPlanes) {
@@ -271,7 +278,8 @@ export const renderWithReflection = (
 			REFLECTION_PARAMS.brightnessEdge +
 			(REFLECTION_PARAMS.brightnessCenter - REFLECTION_PARAMS.brightnessEdge) *
 				centerness;
-		cover.uniforms.uBrightness.value = brightness;
+		cover.uniforms.uBrightness.value =
+			brightness * reflectionBrightnessFade.value;
 		cover.uniforms.uTime.value = t;
 		cover.uniforms.uWaveStrength.value = REFLECTION_PARAMS.waveStrength;
 		cover.uniforms.uWaveFrequency.value = REFLECTION_PARAMS.waveFrequency;
@@ -344,6 +352,7 @@ export const renderWithReflection = (
 		inverseViewProjection,
 	);
 	compositeMaterial.uniforms.uCameraPos.value.copy(camera.position);
+	compositeMaterial.uniforms.uFloorY.value = floorMesh.position.y;
 
 	fullscreenMesh.material = compositeMaterial;
 	compositeMaterial.uniforms.tDiffuse.value = blurRTB.texture;

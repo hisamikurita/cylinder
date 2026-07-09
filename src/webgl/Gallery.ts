@@ -11,9 +11,16 @@ import { camera, scene } from "./core";
 import { createCurvedPlaneGeometry } from "./geometry";
 import { createCoverMaterial, updateCoverMaterialImageSize } from "./material";
 
-export type MediaItem =
+export type MediaItem = (
 	| { type: "image"; url: string }
-	| { type: "video"; url: string; targetAspect?: number };
+	| { type: "video"; url: string; targetAspect?: number }
+) & {
+	title: string;
+	source: {
+		label: string; // 例: "Unsplash — Luca Bravo"
+		url: string; // 出典先ページの URL
+	};
+};
 
 export interface GalleryOptions {
 	radius: number;
