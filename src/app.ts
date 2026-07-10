@@ -67,7 +67,7 @@ setOnZoomChange(({ active, index }) => {
 
 setupReflection();
 setupBackgroundLightHelpers();
-setupGUI();
+// setupGUI();
 
 handleResize(() => resizeReflection());
 
