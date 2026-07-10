@@ -97,6 +97,11 @@ export const zoomToAdjacent = (direction: 1 | -1): void => {
 			duration: DURATION.BASE,
 			ease: EASING.TRANSFORM,
 			overwrite: "auto",
+			// zoomOut 内の DRAG_UNLOCK_DELAY で isRotationPaused=false になった後、
+			// updateGalleryRotation の内挿 (rotation.y += (targetRotation - rotation.y)*0.1)
+			// が旧 targetRotation に向かって引き戻し、tween 中の rotation.y と競合して
+			// カクツキが出るため、毎フレーム targetRotation を同期して打ち消す
+			onUpdate: () => setTargetRotation(galleryGroup.rotation.y),
 		},
 		ADJACENT_TRANSITION_DELAY - ROTATION_LEAD_TIME,
 	);

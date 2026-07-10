@@ -21,7 +21,9 @@ import {
 	reflectionBrightnessFade,
 	renderWithReflection,
 	resizeReflection,
+	ROTATION,
 	scene,
+	setAutoRotationSpeed,
 	setOnZoomChange,
 	setupBackgroundLightHelpers,
 	setupGalleryRotation,
@@ -55,6 +57,8 @@ if (IS_MOBILE) {
 	p.HEIGHT = PLANE.HEIGHT * MOBILE_SCALE;
 	const g = GALLERY as unknown as { RADIUS: number };
 	g.RADIUS = GALLERY.RADIUS * MOBILE_SCALE;
+	// モバイルは自動回転速度を 1.2 倍に (小さい画面でも動きを感じられるよう)
+	setAutoRotationSpeed(ROTATION.AUTO_SPEED * 1.2);
 }
 
 // === LOADING 初期状態 ===
@@ -255,7 +259,7 @@ function finishLoading(): void {
 		r: targetColor.r,
 		g: targetColor.g,
 		b: targetColor.b,
-		duration: REVEAL_DURATION,
+		duration: 2.1,
 		ease: EASING.TRANSFORM,
 		onUpdate: () => {
 			gallerySideMaterial.color.copy(colorProxy);
