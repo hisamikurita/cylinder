@@ -14,7 +14,6 @@ import {
 	resizeReflection,
 	setOnZoomChange,
 	setupBackgroundLightHelpers,
-	setupGUI,
 	setupReflection,
 	startAnimationLoop,
 	updateBackgroundLightHelpers,
@@ -67,7 +66,6 @@ setOnZoomChange(({ active, index }) => {
 
 setupReflection();
 setupBackgroundLightHelpers();
-// setupGUI();
 
 handleResize(() => resizeReflection());
 
