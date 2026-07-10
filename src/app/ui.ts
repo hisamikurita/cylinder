@@ -1,4 +1,4 @@
-import type { MediaItem } from "./webgl";
+import type { MediaItem } from "../webgl";
 
 type UIHandlers = {
 	onPrev: () => void;

@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CAMERA, FOG, SCENE } from "./constants";
 
 export const scene = new THREE.Scene();
@@ -23,9 +22,6 @@ export const renderer = new THREE.WebGLRenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
-export const orbitControls = new OrbitControls(camera, renderer.domElement);
-orbitControls.enabled = false;
-
 export const initRenderer = (container: HTMLElement = document.body): void => {
 	container.appendChild(renderer.domElement);
 };
@@ -40,16 +36,11 @@ export const handleResize = (onResize?: () => void): void => {
 };
 
 export const startAnimationLoop = (
-	callback?: () => void,
-	customRender?: () => void,
+	update: () => void,
+	render: () => void,
 ): void => {
 	renderer.setAnimationLoop(() => {
-		callback?.();
-		orbitControls.update();
-		if (customRender) {
-			customRender();
-		} else {
-			renderer.render(scene, camera);
-		}
+		update();
+		render();
 	});
 };

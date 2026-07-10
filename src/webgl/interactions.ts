@@ -1,8 +1,16 @@
 import gsap from "gsap";
 import * as THREE from "three";
 import { DURATION, EASING, GALLERY, PARALLAX, PLANE } from "./constants";
-import { camera, orbitControls, renderer } from "./core";
-import { galleryGroup } from "./Gallery";
+import { camera, renderer } from "./core";
+import { galleryGroup } from "./gallery";
+import type { CurvedPlaneData } from "./geometry";
+import { volumeLightAlphaFade } from "./lights";
+import {
+	FLOOR_Y,
+	FLOOR_Y_ZOOMED,
+	floorMesh,
+	reflectionBrightnessFade,
+} from "./reflection";
 import {
 	getIsDragging,
 	getWasDragged,
@@ -13,15 +21,7 @@ import {
 	setMouseMoveEnabled,
 	setRotationPaused,
 	setTargetRotation,
-} from "./galleryRotation";
-import type { CurvedPlaneData } from "./geometry";
-import { volumeLightAlphaFade } from "./lights";
-import {
-	FLOOR_Y,
-	FLOOR_Y_ZOOMED,
-	floorMesh,
-	reflectionBrightnessFade,
-} from "./reflection";
+} from "./rotation";
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -45,14 +45,12 @@ const DRAG_UNLOCK_DELAY = 0.4;
 
 // zoomIn 後に UI (title/credit/nav) を出すまでの待ち時間
 // (プレーンの拡大が進んでから UI を見せることでリズムを整える)
-const UI_SHOW_DELAY = 0.80;
+const UI_SHOW_DELAY = 0.8;
 
 export type ZoomState = { active: boolean; index: number | null };
 let onZoomChangeCallback: ((state: ZoomState) => void) | null = null;
 
-export const setOnZoomChange = (
-	cb: (state: ZoomState) => void,
-): void => {
+export const setOnZoomChange = (cb: (state: ZoomState) => void): void => {
 	onZoomChangeCallback = cb;
 };
 
@@ -114,14 +112,10 @@ export const zoomToAdjacent = (direction: 1 | -1): void => {
 
 // ホバー円のフェード設定
 // - uHoverCircle (サイズ): 全期間をゆっくり 0↔1 で動く
-// - uHoverAlpha (不透明度): 短めに動く。入りは delay を挟んでサイズが少し
-//   育ってから見え始め、抜けは即発火でサイズが縮小しきる前に消える
+// - uHoverAlpha (不透明度): 短めに動いて、抜けはサイズが縮小しきる前に消える
 const HOVER_ALPHA_DURATION = 1.0;
-const HOVER_ALPHA_IN_DELAY = 0;
-
-// ホバー中に反射のブライトネスへ加算する値 (per-plane) と、そのフェード秒数
+// ホバー中に反射のブライトネスへ加算する値 (per-plane)
 const HOVER_REFLECTION_BOOST = 2.4;
-
 // ホバー中に emissive へ加算する値
 const HOVER_EMISSIVE_BOOST = 1.5;
 
@@ -137,18 +131,15 @@ const fadeHoverCircle = (plane: THREE.Mesh, target: number): void => {
 	gsap.to(cover.uniforms.uHoverAlpha, {
 		value: target,
 		duration: HOVER_ALPHA_DURATION,
-		delay: target === 1 ? HOVER_ALPHA_IN_DELAY : 0,
 		ease: EASING.MATERIAL,
 		overwrite: true,
 	});
-	// 反射のブライトネスを +HOVER_REFLECTION_BOOST 加算 (ホバー中のみ)
 	gsap.to(cover.uniforms.uReflectionBoost, {
 		value: target * HOVER_REFLECTION_BOOST,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
 		overwrite: true,
 	});
-	// emissive を +HOVER_EMISSIVE_BOOST 加算 (ホバー中のみ)
 	gsap.to(cover.uniforms.uEmissiveBoost, {
 		value: target * HOVER_EMISSIVE_BOOST,
 		duration: DURATION.LONG,
@@ -282,8 +273,6 @@ const zoomIn = (
 	const distance = calculateCameraDistance(params.width, params.height);
 	const targetPositionZ = camera.position.z - distance - GALLERY.RADIUS;
 
-	orbitControls.enabled = false;
-
 	const materials = plane.material as THREE.Material[];
 	const coverMaterial = materials[4] as THREE.ShaderMaterial;
 
@@ -328,7 +317,7 @@ const zoomIn = (
 		{ value: 0, duration: DURATION.BASE, ease: EASING.TRANSFORM },
 		EXPANSION_DELAY,
 	);
-	morphToFlat(plane, EXPANSION_DELAY);
+	morphPlane(plane, "flat", EXPANSION_DELAY);
 
 	setAutoRotating(false);
 	setDragEnabled(false);
@@ -370,7 +359,7 @@ const zoomOut = (): void => {
 			ease: EASING.TRANSFORM,
 		});
 
-		morphToCurved(activePlane);
+		morphPlane(activePlane, "curved");
 		activePlane = null;
 	}
 
@@ -402,69 +391,34 @@ const zoomOut = (): void => {
 	notifyZoomChange();
 };
 
-const morphToFlat = (plane: THREE.Mesh, delay = 0): void => {
+const morphPlane = (
+	plane: THREE.Mesh,
+	target: "flat" | "curved",
+	delay = 0,
+): void => {
 	const geometry = plane.geometry as THREE.BoxGeometry;
-	const data = geometry.userData as CurvedPlaneData;
+	const { flatPositions, curvedPositions } =
+		geometry.userData as CurvedPlaneData;
 	const position = geometry.attributes.position;
 
-	const currentPositions = { value: 0 };
+	const from = target === "flat" ? curvedPositions : flatPositions;
+	const to = target === "flat" ? flatPositions : curvedPositions;
 
-	gsap.to(currentPositions, {
+	const progress = { value: 0 };
+	gsap.to(progress, {
 		value: 1,
 		delay,
 		duration: DURATION.BASE,
 		ease: EASING.TRANSFORM,
 		onUpdate: () => {
-			const t = currentPositions.value;
+			const t = progress.value;
 			for (let i = 0; i < position.count; i++) {
-				const curvedX = data.curvedPositions[i * 3];
-				const curvedY = data.curvedPositions[i * 3 + 1];
-				const curvedZ = data.curvedPositions[i * 3 + 2];
-
-				const flatX = data.flatPositions[i * 3];
-				const flatY = data.flatPositions[i * 3 + 1];
-				const flatZ = data.flatPositions[i * 3 + 2];
-
+				const idx = i * 3;
 				position.setXYZ(
 					i,
-					curvedX + (flatX - curvedX) * t,
-					curvedY + (flatY - curvedY) * t,
-					curvedZ + (flatZ - curvedZ) * t,
-				);
-			}
-			position.needsUpdate = true;
-			geometry.computeVertexNormals();
-		},
-	});
-};
-
-const morphToCurved = (plane: THREE.Mesh): void => {
-	const geometry = plane.geometry as THREE.BoxGeometry;
-	const data = geometry.userData as CurvedPlaneData;
-	const position = geometry.attributes.position;
-
-	const currentPositions = { value: 0 };
-
-	gsap.to(currentPositions, {
-		value: 1,
-		duration: DURATION.BASE,
-		ease: EASING.TRANSFORM,
-		onUpdate: () => {
-			const t = currentPositions.value;
-			for (let i = 0; i < position.count; i++) {
-				const flatX = data.flatPositions[i * 3];
-				const flatY = data.flatPositions[i * 3 + 1];
-				const flatZ = data.flatPositions[i * 3 + 2];
-
-				const curvedX = data.curvedPositions[i * 3];
-				const curvedY = data.curvedPositions[i * 3 + 1];
-				const curvedZ = data.curvedPositions[i * 3 + 2];
-
-				position.setXYZ(
-					i,
-					flatX + (curvedX - flatX) * t,
-					flatY + (curvedY - flatY) * t,
-					flatZ + (curvedZ - flatZ) * t,
+					from[idx] + (to[idx] - from[idx]) * t,
+					from[idx + 1] + (to[idx + 1] - from[idx + 1]) * t,
+					from[idx + 2] + (to[idx + 2] - from[idx + 2]) * t,
 				);
 			}
 			position.needsUpdate = true;

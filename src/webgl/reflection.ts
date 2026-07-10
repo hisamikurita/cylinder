@@ -10,7 +10,8 @@ import {
 	SCENE,
 } from "./constants";
 import { camera, renderer, scene } from "./core";
-import { galleryGroup, galleryPlanes, gallerySideMaterial } from "./Gallery";
+import { galleryGroup, galleryPlanes, gallerySideMaterial } from "./gallery";
+import { computeShaderLightDir } from "./lights";
 import blurFragmentShader from "./shaders/blur.frag?raw";
 import compositeFragmentShader from "./shaders/composite.frag?raw";
 import floorFragmentShader from "./shaders/floor.frag?raw";
@@ -149,22 +150,16 @@ export const updateFloorLightUniforms = (): void => {
 	if (!floorMaterial) return;
 
 	const light = BACKGROUND_LIGHTS[0];
-	const pos3D = light.pos3D;
-	const lightPos = new THREE.Vector3(pos3D.x, pos3D.y, pos3D.z);
-	const lightColor = new THREE.Color(light.colorL);
+	const lightDir = computeShaderLightDir(light.spotAngleX, light.spotAngleY);
 
-	// アングルからスポットライト方向を計算
-	const angleX = THREE.MathUtils.degToRad(light.spotAngleX);
-	const angleY = THREE.MathUtils.degToRad(light.spotAngleY);
-	const lightDir = new THREE.Vector3(0, 0, -1);
-	lightDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), angleX);
-	lightDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleY);
-	lightDir.normalize();
-
-	floorMaterial.uniforms.uLightPos.value.copy(lightPos);
+	floorMaterial.uniforms.uLightPos.value.set(
+		light.pos3D.x,
+		light.pos3D.y,
+		light.pos3D.z,
+	);
 	floorMaterial.uniforms.uLightDir.value.copy(lightDir);
 	floorMaterial.uniforms.uLightConeAngle.value = light.spotConeAngle;
-	floorMaterial.uniforms.uLightColor.value.copy(lightColor);
+	floorMaterial.uniforms.uLightColor.value.setHex(light.colorL);
 	floorMaterial.uniforms.uLightIntensity.value = light.enabled
 		? light.intensity
 		: 0;
@@ -217,21 +212,16 @@ export const resizeReflection = (): void => {
 	blurMaterial.uniforms.uResolution.value.set(w, h);
 };
 
-export const renderWithReflection = (
-	renderTarget?: THREE.WebGLRenderTarget | null,
-): void => {
+export const renderWithReflection = (): void => {
 	const gl = renderer.getContext();
 	renderer.autoClear = false;
-
-	const previousRenderTarget = renderer.getRenderTarget();
-	const finalTarget = renderTarget !== undefined ? renderTarget : null;
 
 	const originalY = galleryGroup.position.y;
 	const originalScaleY = galleryGroup.scale.y;
 	const originalBackground = scene.background;
 
 	// === 1. 最終ターゲットをクリアし、背景を敷いてから床でステンシルを立てる ===
-	renderer.setRenderTarget(finalTarget);
+	renderer.setRenderTarget(null);
 	// 背景色を SCENE.BACKGROUND_COLOR で塗りつぶす
 	const prevClear = new THREE.Color();
 	renderer.getClearColor(prevClear);
@@ -324,19 +314,14 @@ export const renderWithReflection = (
 	renderer.render(fullscreenScene, fullscreenCamera);
 
 	// === 4. 最終ターゲットのステンシル領域にブラー結果を合成 ===
-	renderer.setRenderTarget(finalTarget);
+	renderer.setRenderTarget(null);
 	gl.enable(gl.STENCIL_TEST);
 	gl.stencilFunc(gl.EQUAL, 1, 0xff);
 	gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
 
 	// ライト情報を更新
 	const light = BACKGROUND_LIGHTS[0];
-	const angleX = THREE.MathUtils.degToRad(light.spotAngleX);
-	const angleY = THREE.MathUtils.degToRad(light.spotAngleY);
-	const lightDir = new THREE.Vector3(0, 0, -1);
-	lightDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), angleX);
-	lightDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleY);
-	lightDir.normalize();
+	const lightDir = computeShaderLightDir(light.spotAngleX, light.spotAngleY);
 
 	// inverseViewProjection行列を計算
 	const viewProjection = new THREE.Matrix4();
@@ -378,8 +363,4 @@ export const renderWithReflection = (
 	// 元に戻す
 	scene.background = originalBackground;
 	renderer.autoClear = true;
-
-	if (renderTarget !== undefined) {
-		renderer.setRenderTarget(previousRenderTarget);
-	}
 };

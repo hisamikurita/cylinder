@@ -12,7 +12,7 @@ import {
 	VOLUME_LIGHT_PARAMS,
 } from "./constants";
 import { scene } from "./core";
-import { updateGallerySideColor } from "./Gallery";
+import { updateGallerySideColor } from "./gallery";
 
 // パラメータオブジェクトを constants.ts に貼り付けやすい TS 形式に整形
 const COLOR_KEYS = new Set([

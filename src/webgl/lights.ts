@@ -4,15 +4,6 @@ import { scene } from "./core";
 import volumeLightFragmentShader from "./shaders/volumeLight.frag?raw";
 import volumeLightVertexShader from "./shaders/volumeLight.vert?raw";
 
-export const setupLights = (): void => {
-	const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-	scene.add(ambientLight);
-
-	const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-	directionalLight.position.set(5, 5, 5);
-	scene.add(directionalLight);
-};
-
 type BackgroundLightEntry = {
 	light: THREE.SpotLight;
 	helper: THREE.SpotLightHelper;
@@ -28,7 +19,8 @@ const backgroundLightEntries: BackgroundLightEntry[] = [];
 // updateBackgroundLightHelpers が毎フレーム uAlpha を上書きするので、掛け合わせる形にする
 export const volumeLightAlphaFade = { value: 1 };
 
-// spotAngleX / spotAngleY (degrees) から進行方向ベクトルを算出
+// spotAngleX / spotAngleY (degrees) から円錐 (volume light) の進行方向ベクトルを算出。
+// Euler "YXZ" 順で回転する (Y → X → Z)。SpotLight の target.position 計算にも使う
 const computeSpotDirection = (
 	spotAngleX: number,
 	spotAngleY: number,
@@ -39,6 +31,23 @@ const computeSpotDirection = (
 	const euler = new THREE.Euler(rx, ry, 0, "YXZ");
 	dir.applyEuler(euler);
 	return dir;
+};
+
+// shader の uLightDir に流し込む方向ベクトルを算出 (プレーン/床/composite で共通)。
+// 上と違って X → Y の順に applyAxisAngle するため、同じ角度でも異なるベクトルになる
+// (視覚的な光柱の方向は上、シェーダの照明計算はこちら、と使い分けている)
+const shaderLightDir = new THREE.Vector3();
+export const computeShaderLightDir = (
+	spotAngleX: number,
+	spotAngleY: number,
+): THREE.Vector3 => {
+	const angleX = THREE.MathUtils.degToRad(spotAngleX);
+	const angleY = THREE.MathUtils.degToRad(spotAngleY);
+	shaderLightDir.set(0, 0, -1);
+	shaderLightDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), angleX);
+	shaderLightDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleY);
+	shaderLightDir.normalize();
+	return shaderLightDir;
 };
 
 // production パターン: THREE.SpotLight と円錐 (CylinderGeometry) メッシュを
