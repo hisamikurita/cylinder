@@ -105,7 +105,9 @@ void main() {
 			float freq = 8.0;
 			float speed = 2.3;
 			float phase = r * freq - uTime * speed;
-			float amp = 0.01 * uHoverAlpha * edgeMask * frontMask;
+			// サイズゲート: 円が小さい間は凹凸も出さない (frag 側と同じ 0.2 閾値)
+			float sizeGate = smoothstep(0.0, 0.2, uHoverCircle);
+			float amp = 0.01 * uHoverAlpha * sizeGate * edgeMask * frontMask;
 
 			// 頂点変位 (法線方向に押し出し)
 			pos += nrm * sin(phase) * amp;

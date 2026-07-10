@@ -36,6 +36,9 @@ export const createCoverMaterial = (
 			// gsap で別々にトゥイーンして "サイズは残しつつ先にフェードアウト" などを作る
 			uHoverCircle: { value: 0 },
 			uHoverAlpha: { value: 0 },
+			// Chromatic aberration + slice glitch の衝撃波半径 (0..1)。
+			// hover-in 時に JS 側で 0→1 を 2 回繰り返して中央から放射状に発火させる
+			uGlitchRadius: { value: 0 },
 			// ホバー中に反射描画の brightness に足し込む加算値 (renderWithReflection 側で使用)
 			uReflectionBoost: { value: 0 },
 			// ホバー中に emissive に足し込む加算値 (updateParallax 側で加算)

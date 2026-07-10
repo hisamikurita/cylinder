@@ -15,7 +15,8 @@
       "Bash(curl -sI \"https://images.unsplash.com/photo-1781099999671-08a6de4f36df\")",
       "WebFetch(domain:source.unsplash.com)",
       "WebFetch(domain:unsplash.com)",
-      "Bash(curl -sI \"https://images.unsplash.com/photo-1465101162946-4377e57745c3\")"
+      "Bash(curl -sI \"https://images.unsplash.com/photo-1465101162946-4377e57745c3\")",
+      "Bash(npx vite *)"
     ]
   }
 }

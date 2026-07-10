@@ -18,6 +18,9 @@ uniform float uEmissive;
 // Hover 黒円: サイズ制御 (uHoverCircle) と不透明度制御 (uHoverAlpha) を分離
 uniform float uHoverCircle;
 uniform float uHoverAlpha;
+// Chromatic aberration + slice glitch の衝撃波半径 (0..1)。
+// hover-in の瞬間に JS 側で 0→1 を 2 回、中央から放射状に発火させる
+uniform float uGlitchRadius;
 
 // Vignette
 uniform float uVignetteStrength;
@@ -158,8 +161,68 @@ void main() {
 				uv += vec2(rx, ry) * uWaveStrength * 0.15;
 			}
 
+			// Hover-in の瞬間に uGlitchRadius が 0→1 を 2 回繰り返す。
+			// 「衝撃波」として中央から広がるリング + sin エンベロープで
+			// 開始 (radius=0) と終了 (radius=1) は 0、中間 (radius=0.5) がピーク
+			vec4 texColor;
+			if (uGlitchRadius > 0.0) {
+				float aspect = uPlaneSize.x / uPlaneSize.y;
+				vec2 gc = (vUv - 0.5) * vec2(aspect, 1.0);
+				float gDist = length(gc);
+
+				// Shockwave: uGlitchRadius に合わせて中央から広がるリング
+				// MAX_RADIUS: 波の最大到達距離
+				// RING_WIDTH: リングの太さ
+				const float MAX_RADIUS = 1.2;
+				const float RING_WIDTH = 0.35;
+				float edge = uGlitchRadius * MAX_RADIUS;
+				float ringMask = smoothstep(edge - RING_WIDTH, edge, gDist)
+					- smoothstep(edge, edge + RING_WIDTH * 0.5, gDist);
+				ringMask = clamp(ringMask, 0.0, 1.0);
+
+				// 半径 0/1 で 0、中間で 1 になる sin エンベロープ (山なりに立ち上がる)
+				float envelope = sin(uGlitchRadius * 3.14159265);
+
+				// freq: グリッチのブロックサイズ (大 = 細かい)
+				// speed: 崩れ方の切り替わりの速さ
+				// strength: RGB 分離の最大 UV オフセット
+				const float GLITCH_FREQ = 2.8;
+				const float GLITCH_SPEED = 1.8;
+				const float ABERRATION_STRENGTH = 0.012;
+
+				float gt = uTime * GLITCH_SPEED + uWaveSeed * 30.0;
+				float gn = snoise(vec3(vUv * GLITCH_FREQ, gt)); // -1..1
+				float glitchAmount = smoothstep(0.1, 1.0, abs(gn));
+
+				float amp = ABERRATION_STRENGTH * ringMask * envelope * glitchAmount;
+				// 主に水平方向、少しだけ縦揺れを混ぜる
+				vec2 dir = normalize(vec2(1.0, gn * 0.4));
+				vec2 rOff = dir * amp;
+				vec2 bOff = -dir * amp;
+
+				// 水平スライスのシフト (VHS ティアリング風)
+				// SLICE_FREQ: スライスの細かさ (縦方向)
+				// SLICE_THRESHOLD: 発生する頻度 (大 = 疎)
+				// SLICE_OFFSET_STRENGTH: 横シフト量 (UV 単位)
+				const float SLICE_FREQ = 60.0;
+				const float SLICE_THRESHOLD = 1.0;
+				const float SLICE_OFFSET_STRENGTH = 0.030;
+				float sliceNoise = snoise(vec3(11.0, vUv.y * SLICE_FREQ, gt * 2.0));
+				float sliceAmount = smoothstep(SLICE_THRESHOLD, 1.0, abs(sliceNoise));
+				float sliceShift = sign(sliceNoise) * sliceAmount
+					* SLICE_OFFSET_STRENGTH * ringMask * envelope;
+				vec2 hoverUv = uv + vec2(sliceShift, 0.0);
+
+				float r = texture2D(uTexture, hoverUv + rOff).r;
+				float g = texture2D(uTexture, hoverUv).g;
+				float b = texture2D(uTexture, hoverUv + bOff).b;
+				texColor = vec4(r, g, b, 1.0);
+			} else {
+				texColor = texture2D(uTexture, uv);
+			}
+
 			// 未ロード時は下地 #000 を表示する
-			color = mix(vec4(0.0, 0.0, 0.0, 1.0), texture2D(uTexture, uv), uTextureLoaded);
+			color = mix(vec4(0.0, 0.0, 0.0, 1.0), texColor, uTextureLoaded);
 			isImage = true;
 
 			// Vignette: UV 中心 (0.5, 0.5) からの距離で減衰。
@@ -184,14 +247,21 @@ void main() {
 				// pow の指数 < 1 で中央付近の "濃い" 帯を広げつつ、
 				// smoothstep 端はゼロに向かうので縁は依然として溶ける
 				float disc = pow(1.0 - smoothstep(0.0, discMax, circleDist), 0.7);
-				color.rgb = mix(color.rgb, vec3(0.0), disc * uHoverAlpha * 0.7);
+
+				// サイズゲート: 円が十分育つまで effectiveAlpha を抑える。
+				// 初回 hover では alpha も低いので視覚差はほぼ無い一方、
+				// 再 hover (alpha 継続) 時の「小さい高不透明度の点」を隠す
+				float sizeGate = smoothstep(0.0, 0.2, uHoverCircle);
+				float effectiveAlpha = uHoverAlpha * sizeGate;
+
+				color.rgb = mix(color.rgb, vec3(0.0), disc * effectiveAlpha * 0.7);
 
 				// 波紋の谷 (sin の山側) をわずかに濃くして立体感を補強
 				// (freq / speed は plane.vert の波と一致させる)
 				float phase = circleDist * 8.0 - uTime * 2.3;
 				float trough = pow(max(sin(phase), 0.0), 3.0);
 				float rippleMask = 1.0 - smoothstep(0.4, 1.05, circleDist);
-				color.rgb = mix(color.rgb, vec3(0.0), trough * rippleMask * uHoverAlpha * 0.10);
+				color.rgb = mix(color.rgb, vec3(0.0), trough * rippleMask * effectiveAlpha * 0.10);
 			}
 		}
 	}

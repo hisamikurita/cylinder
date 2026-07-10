@@ -111,26 +111,46 @@ export const zoomToAdjacent = (direction: 1 | -1): void => {
 };
 
 // ホバー円のフェード設定
-// - uHoverCircle (サイズ): 全期間をゆっくり 0↔1 で動く
-// - uHoverAlpha (不透明度): 短めに動いて、抜けはサイズが縮小しきる前に消える
-const HOVER_ALPHA_DURATION = 1.0;
+// - uHoverCircle (サイズ) / uHoverAlpha (不透明度) ともに hover-in と hover-out で
+//   duration を分けて、hover-in は素早く立ち上げ、hover-out はゆっくり消して余韻を残す
+const HOVER_CIRCLE_DURATION_IN = 2.0;
+const HOVER_CIRCLE_DURATION_OUT = 3.5;
+const HOVER_ALPHA_DURATION_IN = 1.2;
+const HOVER_ALPHA_DURATION_OUT = 2.0;
 // ホバー中に反射のブライトネスへ加算する値 (per-plane)
 const HOVER_REFLECTION_BOOST = 2.4;
 // ホバー中に emissive へ加算する値
 const HOVER_EMISSIVE_BOOST = 1.5;
 
+// hover-in の瞬間に uGlitchRadius を 0→1 に 1 回、中央から放射状に広げる
+const triggerGlitchBurst = (uniform: { value: number }): void => {
+	gsap.killTweensOf(uniform);
+	uniform.value = 0;
+	gsap
+		.timeline()
+		.to(uniform, { value: 1, duration: DURATION.EXTRA_LONG, ease: EASING.TRANSFORM })
+		.set(uniform, { value: 0 });
+};
+
 const fadeHoverCircle = (plane: THREE.Mesh, target: number): void => {
 	const materials = plane.material as THREE.Material[];
 	const cover = materials[4] as THREE.ShaderMaterial;
+
+	// hover-in / hover-out どちらも「現在値」から target へトゥイーン継続。
+	// 途中で切り返しても値が反転成長するだけで、可視の縮小/膨張ジャンプは出ない
 	gsap.to(cover.uniforms.uHoverCircle, {
 		value: target,
-		duration: DURATION.EXTRA_LONG,
+		duration:
+			target === 1 ? HOVER_CIRCLE_DURATION_IN : HOVER_CIRCLE_DURATION_OUT,
 		ease: EASING.TRANSFORM,
 		overwrite: true,
 	});
+
+	// uHoverAlpha は現在値から継続 (opacity の連続性を優先)。
+	// hover-out は sizeGate が支配的になる前にゆっくり消して余韻を出す
 	gsap.to(cover.uniforms.uHoverAlpha, {
 		value: target,
-		duration: HOVER_ALPHA_DURATION,
+		duration: target === 1 ? HOVER_ALPHA_DURATION_IN : HOVER_ALPHA_DURATION_OUT,
 		ease: EASING.MATERIAL,
 		overwrite: true,
 	});
@@ -146,6 +166,12 @@ const fadeHoverCircle = (plane: THREE.Mesh, target: number): void => {
 		ease: EASING.TRANSFORM,
 		overwrite: true,
 	});
+	if (target === 1) {
+		triggerGlitchBurst(cover.uniforms.uGlitchRadius as { value: number });
+	} else {
+		gsap.killTweensOf(cover.uniforms.uGlitchRadius);
+		(cover.uniforms.uGlitchRadius as { value: number }).value = 0;
+	}
 };
 
 export const setupInteractions = (planes: THREE.Mesh[]): void => {
