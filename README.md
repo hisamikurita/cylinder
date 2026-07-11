@@ -20,3 +20,7 @@ A cylindrical gallery built with Three.js, 🤖 Generated with Claude Code Opus 
 ```
   pnpm build 
 ```
+
+## Inspire 💡
+
+- https://aircord.co.jp/
