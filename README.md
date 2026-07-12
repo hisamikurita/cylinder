@@ -21,6 +21,6 @@ A cylindrical gallery built with Three.js, 🤖 Generated with Claude Code Opus 
   pnpm build 
 ```
 
-## Inspire 💡
+## Original 💡
 
 - https://aircord.co.jp/
