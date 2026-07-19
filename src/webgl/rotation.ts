@@ -33,6 +33,9 @@ export const setupGalleryRotation = (): void => {
 	canvas.addEventListener("touchmove", onTouchMove);
 	canvas.addEventListener("touchend", onTouchEnd);
 
+	// ホイール対応 (preventDefault するため passive: false)
+	canvas.addEventListener("wheel", onWheel, { passive: false });
+
 	// Tilt用のmousemove（常時）
 	window.addEventListener("mousemove", onMouseMoveTilt);
 };
@@ -126,6 +129,31 @@ const onTouchMove = (event: TouchEvent): void => {
 	currentVelocity = deltaX * dragSensitivity;
 	targetRotation += currentVelocity;
 	previousMouseX = event.touches[0].clientX;
+};
+
+let wheelResumeTimer: ReturnType<typeof setTimeout> | null = null;
+
+const onWheel = (event: WheelEvent): void => {
+	if (!isDragEnabled) return;
+	event.preventDefault();
+
+	// 縦横どちらのスクロールでも、大きい方の delta で回転させる
+	const delta =
+		Math.abs(event.deltaY) > Math.abs(event.deltaX)
+			? event.deltaY
+			: event.deltaX;
+
+	isAutoRotating = false;
+	currentVelocity = delta * ROTATION.WHEEL_SENSITIVITY;
+	targetRotation += currentVelocity;
+
+	// ホイールが止まってしばらくしたらオート回転を再開する
+	if (wheelResumeTimer !== null) clearTimeout(wheelResumeTimer);
+	wheelResumeTimer = setTimeout(() => {
+		wheelResumeTimer = null;
+		if (!isDragEnabled || isDragging) return;
+		isAutoRotating = true;
+	}, ROTATION.WHEEL_RESUME_DELAY_MS);
 };
 
 const onTouchEnd = (): void => {

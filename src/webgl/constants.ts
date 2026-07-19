@@ -30,6 +30,8 @@ export const ROTATION = {
 	DAMPING: 0.95,
 	DRAG_SENSITIVITY: 0.005,
 	DRAG_THRESHOLD: 5,
+	WHEEL_SENSITIVITY: 0.0005,
+	WHEEL_RESUME_DELAY_MS: 800,
 } as const;
 
 // Gallery Layout
